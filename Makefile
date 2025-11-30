@@ -25,7 +25,7 @@ setup-verify:
 backend-proto:
 	@$(MAKE) -C backend proto
 
-backend-inference:
+backend-inference: kill-ports
 	@$(MAKE) -C backend inference
 
 backend-inference-install:
@@ -34,10 +34,10 @@ backend-inference-install:
 backend-inference-test:
 	@$(MAKE) -C backend inference-test
 
-backend-platform:
+backend-platform: kill-ports
 	@$(MAKE) -C backend platform
 
-backend-platform-dev:
+backend-platform-dev: kill-ports
 	@$(MAKE) -C backend platform-dev
 
 backend-platform-test:
@@ -61,7 +61,7 @@ backend-install:
 backend-clean:
 	@$(MAKE) -C backend clean
 
-backend-start:
+backend-start: kill-ports
 	@$(MAKE) -C backend start
 
 # Aliases for convenience
@@ -78,7 +78,7 @@ platform-test: backend-platform-test
 frontend-install:
 	@cd frontend && npm install
 
-frontend:
+frontend: kill-ports
 	@cd frontend && npm run dev
 
 frontend-build:
@@ -88,8 +88,9 @@ frontend-build:
 # Development
 # ============================================================================
 
-dev:
+dev: kill-ports
 	@echo "Starting all services..."
+	@sleep 0.5
 	@$(MAKE) -j3 backend-inference backend-platform frontend
 
 install: backend-install frontend-install
@@ -116,9 +117,9 @@ clean: backend-clean
 	@echo "Cleaned all build artifacts"
 
 kill-ports:
-	@./scripts/kill_port.sh 8000
-	@./scripts/kill_port.sh 50051
-	@echo "Killed processes on ports 8000 and 50051"
+	@./scripts/kill_port.sh 5173 2>/dev/null || true
+	@./scripts/kill_port.sh 8000 2>/dev/null || true
+	@./scripts/kill_port.sh 50051 2>/dev/null || true
 
 # ============================================================================
 # Help
@@ -151,4 +152,4 @@ help:
 	@echo ""
 	@echo "Utilities:"
 	@echo "  make clean                - Remove build artifacts"
-	@echo "  make kill-ports           - Kill processes on ports 8000 and 50051"
+	@echo "  make kill-ports           - Kill processes on ports 5173, 8000, 50051"
