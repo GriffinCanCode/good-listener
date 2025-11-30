@@ -59,6 +59,7 @@ const getBackoffDelay = (attempt: number): number => {
 export const useChatConnection = () => {
   const ws = useRef<WebSocket | null>(null);
   const reconnectAttempt = useRef(0);
+  const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // We use selectors to avoid re-renders if possible, but here we just destructure actions which are stable
   const setStatus = useChatStore((state) => state.setStatus);
@@ -79,6 +80,10 @@ export const useChatConnection = () => {
     ws.current = new WebSocket(WS_URL);
 
     ws.current.onopen = () => {
+      if (reconnectTimeout.current) {
+        clearTimeout(reconnectTimeout.current);
+        reconnectTimeout.current = null;
+      }
       reconnectAttempt.current = 0;
       setStatus('connected');
     };
@@ -86,7 +91,7 @@ export const useChatConnection = () => {
       setStatus('disconnected');
       const delay = getBackoffDelay(reconnectAttempt.current);
       reconnectAttempt.current++;
-      setTimeout(connect, delay);
+      reconnectTimeout.current = setTimeout(connect, delay);
     };
 
     ws.current.onmessage = (e: MessageEvent<string>) => {
@@ -137,6 +142,7 @@ export const useChatConnection = () => {
   useEffect(() => {
     connect();
     return () => {
+      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
       ws.current?.close();
     };
   }, [connect]);

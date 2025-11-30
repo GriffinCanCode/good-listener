@@ -1,8 +1,9 @@
 """Test fixtures for inference services."""
 
-import pytest
 from unittest.mock import MagicMock
+
 import numpy as np
+import pytest
 from PIL import Image
 
 
@@ -46,12 +47,14 @@ def mock_chromadb():
     """Mock ChromaDB collection."""
     mock = MagicMock()
     mock.add = MagicMock()
-    mock.query = MagicMock(return_value={
-        "ids": [["id_1", "id_2"]],
-        "documents": [["Relevant memory 1", "Relevant memory 2"]],
-        "metadatas": [[{"source": "audio", "access_count": 0}, {"source": "screen", "access_count": 0}]],
-        "distances": [[0.1, 0.2]],
-    })
+    mock.query = MagicMock(
+        return_value={
+            "ids": [["id_1", "id_2"]],
+            "documents": [["Relevant memory 1", "Relevant memory 2"]],
+            "metadatas": [[{"source": "audio", "access_count": 0}, {"source": "screen", "access_count": 0}]],
+            "distances": [[0.1, 0.2]],
+        }
+    )
     mock.count = MagicMock(return_value=100)
     mock.get = MagicMock(return_value={"ids": [], "metadatas": []})
     mock.delete = MagicMock()
@@ -82,11 +85,65 @@ def mock_vad_model():
 def mock_llm():
     """Mock LLM for streaming responses."""
     mock = MagicMock()
-    
+
     async def mock_astream(messages):
         chunks = ["Hello", ", ", "world", "!"]
         for chunk in chunks:
             yield MagicMock(content=chunk)
-    
+
     mock.astream = mock_astream
+    return mock
+
+
+class MockSegment:
+    """Mock pyannote Segment."""
+
+    def __init__(self, start: float, end: float):
+        self.start = start
+        self.end = end
+
+
+class MockDiarization:
+    """Mock pyannote diarization output."""
+
+    def __init__(self, tracks: list[tuple[tuple[float, float], str]]):
+        self._tracks = tracks
+
+    def itertracks(self, yield_label: bool = False):
+        for (start, end), speaker in self._tracks:
+            yield MockSegment(start, end), None, speaker
+
+
+@pytest.fixture
+def mock_diarization_pipeline():
+    """Mock pyannote diarization pipeline."""
+    mock = MagicMock()
+    mock.to = MagicMock(return_value=mock)
+    mock.return_value = MockDiarization([
+        ((0.0, 2.5), "SPEAKER_00"),
+        ((2.5, 5.0), "SPEAKER_00"),
+    ])
+    return mock
+
+
+@pytest.fixture
+def mock_diarization_pipeline_multi():
+    """Mock pipeline with multiple speakers."""
+    mock = MagicMock()
+    mock.to = MagicMock(return_value=mock)
+    mock.return_value = MockDiarization([
+        ((0.0, 2.0), "SPEAKER_00"),
+        ((2.0, 4.0), "SPEAKER_01"),
+        ((4.0, 6.0), "SPEAKER_00"),
+        ((6.0, 8.0), "SPEAKER_02"),
+    ])
+    return mock
+
+
+@pytest.fixture
+def mock_diarization_pipeline_empty():
+    """Mock pipeline with no speech detected."""
+    mock = MagicMock()
+    mock.to = MagicMock(return_value=mock)
+    mock.return_value = MockDiarization([])
     return mock
