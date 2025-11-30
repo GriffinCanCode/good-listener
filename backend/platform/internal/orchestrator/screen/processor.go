@@ -2,11 +2,16 @@
 package screen
 
 import (
+	"bytes"
 	"context"
+	"image"
+	_ "image/jpeg" // JPEG decoder
+	_ "image/png"  // PNG decoder
 	"log/slog"
 	"sync"
 	"time"
 
+	"github.com/corona10/goimagehash"
 	screencap "github.com/good-listener/platform/internal/screen"
 )
 
@@ -29,6 +34,7 @@ type Processor struct {
 	text      string
 	image     []byte
 	recording bool
+	lastHash  *goimagehash.ImageHash
 }
 
 // NewProcessor creates a screen processor.
@@ -66,6 +72,11 @@ func (p *Processor) Run(ctx context.Context, captureRate float64, stopCh <-chan 
 			p.image = imgData
 			p.mu.Unlock()
 
+			// Skip OCR if perceptual hash similarity > 95%
+			if p.shouldSkipOCR(imgData) {
+				continue
+			}
+
 			text, err := p.ocr.ExtractText(ctx, imgData, "jpeg")
 			if err != nil {
 				slog.Debug("OCR error", "error", err)
@@ -89,6 +100,42 @@ func (p *Processor) Run(ctx context.Context, captureRate float64, stopCh <-chan 
 			p.mu.Unlock()
 		}
 	}
+}
+
+// shouldSkipOCR computes pHash and returns true if similarity to previous frame > 95%.
+func (p *Processor) shouldSkipOCR(imgData []byte) bool {
+	img, _, err := image.Decode(bytes.NewReader(imgData))
+	if err != nil {
+		return false
+	}
+
+	hash, err := goimagehash.PerceptionHash(img)
+	if err != nil {
+		return false
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if p.lastHash == nil {
+		p.lastHash = hash
+		return false
+	}
+
+	dist, err := p.lastHash.Distance(hash)
+	if err != nil {
+		p.lastHash = hash
+		return false
+	}
+
+	// Skip OCR if Hamming distance <= threshold (frames are similar)
+	if dist <= MaxHashDistance {
+		slog.Debug("skipping OCR due to similar frame", "distance", dist)
+		return true
+	}
+
+	p.lastHash = hash
+	return false
 }
 
 // Text returns latest OCR text.
