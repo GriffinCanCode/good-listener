@@ -1,10 +1,29 @@
 import { MessageSquare, Plus, Trash2, X } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { duration, ease, fadeIn, fadeOut, slideIn, slideOut } from '../lib/animations';
 import { useChatStore } from '../store/useChatStore';
 import { useUIStore } from '../store/useUIStore';
 
-export const Sidebar: React.FC = () => {
+interface SessionItemProps {
+  id: string;
+  title: string;
+  isActive: boolean;
+  onSelect: (id: string) => void;
+  onDelete: (id: string, e: React.MouseEvent) => void;
+}
+
+const SessionItem = memo(({ id, title, isActive, onSelect, onDelete }: SessionItemProps) => (
+  <div onClick={() => onSelect(id)} className={`session-item ${isActive ? 'active' : ''}`}>
+    <MessageSquare size={16} className="session-icon" />
+    <span className="session-title">{title}</span>
+    <button onClick={(e) => onDelete(id, e)} className="delete-btn">
+      <Trash2 size={14} />
+    </button>
+  </div>
+));
+SessionItem.displayName = 'SessionItem';
+
+export const Sidebar = memo(() => {
   const { sessions, currentSessionId, selectSession, createSession, deleteSession } =
     useChatStore();
   const { isSidebarOpen, setSidebarOpen } = useUIStore();
@@ -22,7 +41,6 @@ export const Sidebar: React.FC = () => {
       });
     } else if (shouldRender) {
       const onComplete = () => setShouldRender(false);
-      // Trigger both, one controls the completion
       fadeOut(backdropRef.current, { duration: duration.fast, ease: ease.silk });
       slideOut(sidebarRef.current, 'left', {
         duration: duration.fast,
@@ -32,10 +50,15 @@ export const Sidebar: React.FC = () => {
     }
   }, [isSidebarOpen, shouldRender]);
 
-  const handleDelete = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    deleteSession(id);
-  };
+  const handleDelete = useCallback(
+    (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      deleteSession(id);
+    },
+    [deleteSession]
+  );
+
+  const handleClose = useCallback(() => setSidebarOpen(false), [setSidebarOpen]);
 
   if (!shouldRender) return null;
 
@@ -43,14 +66,14 @@ export const Sidebar: React.FC = () => {
     <>
       <div
         ref={backdropRef}
-        onClick={() => setSidebarOpen(false)}
+        onClick={handleClose}
         className="sidebar-backdrop"
         style={{ opacity: 0 }}
       />
       <div ref={sidebarRef} className="sidebar" style={{ transform: 'translateX(-100%)' }}>
         <div className="sidebar-header">
           <h2>History</h2>
-          <button onClick={() => setSidebarOpen(false)} className="icon-btn">
+          <button onClick={handleClose} className="icon-btn">
             <X size={18} />
           </button>
         </div>
@@ -65,21 +88,19 @@ export const Sidebar: React.FC = () => {
             <div className="empty-history">No history yet.</div>
           ) : (
             sessions.map((session) => (
-              <div
+              <SessionItem
                 key={session.id}
-                onClick={() => selectSession(session.id)}
-                className={`session-item ${session.id === currentSessionId ? 'active' : ''}`}
-              >
-                <MessageSquare size={16} className="session-icon" />
-                <span className="session-title">{session.title}</span>
-                <button onClick={(e) => handleDelete(session.id, e)} className="delete-btn">
-                  <Trash2 size={14} />
-                </button>
-              </div>
+                id={session.id}
+                title={session.title}
+                isActive={session.id === currentSessionId}
+                onSelect={selectSession}
+                onDelete={handleDelete}
+              />
             ))
           )}
         </div>
       </div>
     </>
   );
-};
+});
+Sidebar.displayName = 'Sidebar';

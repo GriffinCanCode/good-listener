@@ -1,10 +1,10 @@
 import gsap from 'gsap';
 import { Mic, MicOff } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useRef } from 'react';
 import { ease } from '../lib/animations';
 import { useChatStore } from '../store/useChatStore';
 
-export const MicButton = () => {
+export const MicButton = memo(() => {
   const micEnabled = useChatStore((s) => s.micEnabled);
   const setMicEnabled = useChatStore((s) => s.setMicEnabled);
   const status = useChatStore((s) => s.status);
@@ -32,22 +32,26 @@ export const MicButton = () => {
     };
   }, [isConnecting]);
 
-  const handlePress = () => {
+  const handlePress = useCallback(() => {
     if (buttonRef.current) {
       gsap.to(buttonRef.current, { scale: 0.92, duration: 0.1, ease: ease.snap });
     }
-  };
+  }, []);
 
-  const handleRelease = () => {
+  const handleRelease = useCallback(() => {
     if (buttonRef.current) {
       gsap.to(buttonRef.current, { scale: 1, duration: 0.2, ease: ease.bounce });
     }
-  };
+  }, []);
+
+  const handleToggle = useCallback(() => {
+    setMicEnabled(!micEnabled);
+  }, [micEnabled, setMicEnabled]);
 
   return (
     <button
       ref={buttonRef}
-      onClick={() => setMicEnabled(!micEnabled)}
+      onClick={handleToggle}
       onMouseDown={handlePress}
       onMouseUp={handleRelease}
       onMouseLeave={handleRelease}
@@ -58,4 +62,5 @@ export const MicButton = () => {
       {micEnabled ? <Mic size={18} /> : <MicOff size={18} />}
     </button>
   );
-};
+});
+MicButton.displayName = 'MicButton';

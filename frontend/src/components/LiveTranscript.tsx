@@ -1,6 +1,6 @@
 import gsap from 'gsap';
 import { Activity, Mic, User } from 'lucide-react';
-import React, { useEffect, useRef } from 'react';
+import React, { memo, useEffect, useRef } from 'react';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import { duration, ease } from '../lib/animations';
 import { useChatStore } from '../store/useChatStore';
@@ -14,7 +14,7 @@ interface TranscriptItemProps {
   index: number;
 }
 
-const TranscriptItem = ({ source, speaker, text, index }: TranscriptItemProps) => {
+const TranscriptItem = memo(({ source, speaker, text, index }: TranscriptItemProps) => {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,9 +37,10 @@ const TranscriptItem = ({ source, speaker, text, index }: TranscriptItemProps) =
       </div>
     </div>
   );
-};
+});
+TranscriptItem.displayName = 'TranscriptItem';
 
-const TranscriptList = () => {
+const TranscriptList = memo(() => {
   const transcripts = useChatStore((state) => state.liveTranscripts);
   const { containerRef } = useAutoScroll(transcripts);
 
@@ -66,22 +67,21 @@ const TranscriptList = () => {
       </div>
     </div>
   );
-};
-
-export const LiveTranscript = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->((props, ref) => {
-  return (
-    <div ref={ref} className="live-transcript-wrapper" {...props}>
-      <div className="transcript-header">
-        <span>Live Transcript</span>
-        <Activity size={14} style={{ opacity: 0.5 }} />
-      </div>
-      <VoiceActivityIndicator />
-      <TranscriptList />
-    </div>
-  );
 });
+TranscriptList.displayName = 'TranscriptList';
 
+export const LiveTranscript = memo(
+  React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => {
+    return (
+      <div ref={ref} className="live-transcript-wrapper" {...props}>
+        <div className="transcript-header">
+          <span>Live Transcript</span>
+          <Activity size={14} style={{ opacity: 0.5 }} />
+        </div>
+        <VoiceActivityIndicator />
+        <TranscriptList />
+      </div>
+    );
+  })
+);
 LiveTranscript.displayName = 'LiveTranscript';

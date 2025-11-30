@@ -1,19 +1,20 @@
 import gsap from 'gsap';
 import { Mic, Volume2 } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { breathe, duration, ease } from '../lib/animations';
 import { useChatStore } from '../store/useChatStore';
 
 const BAR_COUNT = 5;
 const DECAY_MS = 150;
 
-const AudioBar: React.FC<{
+const AudioBar = memo<{
   probability: number;
   index: number;
   isActive: boolean;
   color: string;
-}> = ({ probability, index, isActive, color }) => {
+}>(({ probability, index, isActive, color }) => {
   const ref = useRef<HTMLDivElement>(null);
+  // Pithier calculation
   const offset = (index - Math.floor(BAR_COUNT / 2)) * 0.12;
   const adjusted = Math.max(0, Math.min(1, probability + offset * (probability > 0.3 ? 1 : 0)));
   const targetHeight = isActive ? adjusted : 0;
@@ -39,15 +40,16 @@ const AudioBar: React.FC<{
       }}
     />
   );
-};
+});
+AudioBar.displayName = 'AudioBar';
 
-const ChannelIndicator: React.FC<{
+const ChannelIndicator = memo<{
   source: 'user' | 'system';
   probability: number;
   isSpeech: boolean;
   label: string;
   icon: React.ReactNode;
-}> = ({ source, probability, isSpeech, label, icon }) => {
+}>(({ source, probability, isSpeech, label, icon }) => {
   const color = source === 'user' ? 'var(--accent-primary)' : 'var(--success)';
   const glowColor = source === 'user' ? 'var(--accent-glow)' : 'var(--success-glow)';
   const iconRef = useRef<HTMLDivElement>(null);
@@ -96,11 +98,13 @@ const ChannelIndicator: React.FC<{
       </div>
     </div>
   );
-};
+});
+ChannelIndicator.displayName = 'ChannelIndicator';
 
-export const VoiceActivityIndicator: React.FC = () => {
+export const VoiceActivityIndicator = memo(() => {
   const { vad, status } = useChatStore();
   const containerRef = useRef<HTMLDivElement>(null);
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isConnected = status === 'connected';
 
   const useVadDecay = (source: 'user' | 'system') => {
@@ -128,17 +132,22 @@ export const VoiceActivityIndicator: React.FC = () => {
   const user = useVadDecay('user');
   const system = useVadDecay('system');
 
-  // Initial setup to prevent flash
   useEffect(() => {
     if (containerRef.current && !isConnected) {
       gsap.set(containerRef.current, { height: 0, opacity: 0, marginTop: 0 });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     if (isConnected) {
+      if (closeTimerRef.current) {
+        clearTimeout(closeTimerRef.current);
+        closeTimerRef.current = null;
+      }
+
       gsap.to(containerRef.current, {
         height: 'auto',
         marginTop: 16,
@@ -147,14 +156,22 @@ export const VoiceActivityIndicator: React.FC = () => {
         ease: ease.butter,
       });
     } else {
-      gsap.to(containerRef.current, {
-        height: 0,
-        marginTop: 0,
-        opacity: 0,
-        duration: duration.fast,
-        ease: ease.butter,
-      });
+      closeTimerRef.current = setTimeout(() => {
+        if (containerRef.current) {
+          gsap.to(containerRef.current, {
+            height: 0,
+            marginTop: 0,
+            opacity: 0,
+            duration: duration.fast,
+            ease: ease.butter,
+          });
+        }
+      }, 1000);
     }
+
+    return () => {
+      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
+    };
   }, [isConnected]);
 
   return (
@@ -178,4 +195,5 @@ export const VoiceActivityIndicator: React.FC = () => {
       </div>
     </div>
   );
-};
+});
+VoiceActivityIndicator.displayName = 'VoiceActivityIndicator';

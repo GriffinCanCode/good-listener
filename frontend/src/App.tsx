@@ -8,7 +8,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { LiveTranscript } from './components/LiveTranscript';
 import { MicButton } from './components/MicButton';
@@ -31,8 +31,8 @@ interface AutoAnswerCardProps {
   onDismiss: () => void;
 }
 
-const AutoAnswerCard = React.forwardRef<HTMLDivElement, AutoAnswerCardProps>(
-  ({ autoAnswer, onDismiss }, ref) => (
+const AutoAnswerCard = memo(
+  React.forwardRef<HTMLDivElement, AutoAnswerCardProps>(({ autoAnswer, onDismiss }, ref) => (
     <div ref={ref} className="auto-answer-card">
       <div className="auto-answer-header">
         <div className="auto-answer-badge">
@@ -64,32 +64,31 @@ const AutoAnswerCard = React.forwardRef<HTMLDivElement, AutoAnswerCardProps>(
         </div>
       )}
     </div>
-  )
+  ))
 );
 AutoAnswerCard.displayName = 'AutoAnswerCard';
 
-const Message: React.FC<{ content: string; role: 'user' | 'assistant'; index: number }> = ({
-  content,
-  role,
-  index,
-}) => {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    fadeIn(ref.current, {
-      y: 12,
-      delay: index * 0.02,
-      duration: duration.normal,
-      ease: ease.butter,
-    });
-  }, [index]);
-  return (
-    <div ref={ref} className={`message ${role}`}>
-      <ReactMarkdown>{content}</ReactMarkdown>
-    </div>
-  );
-};
+const Message = memo<{ content: string; role: 'user' | 'assistant'; index: number }>(
+  ({ content, role, index }) => {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+      fadeIn(ref.current, {
+        y: 12,
+        delay: index * 0.02,
+        duration: duration.normal,
+        ease: ease.butter,
+      });
+    }, [index]);
+    return (
+      <div ref={ref} className={`message ${role}`}>
+        <ReactMarkdown>{content}</ReactMarkdown>
+      </div>
+    );
+  }
+);
+Message.displayName = 'Message';
 
-const StreamMessage: React.FC<{ content: string }> = ({ content }) => {
+const StreamMessage = memo<{ content: string }>(({ content }) => {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     fadeIn(ref.current, { duration: duration.fast, ease: ease.silk });
@@ -99,9 +98,10 @@ const StreamMessage: React.FC<{ content: string }> = ({ content }) => {
       <ReactMarkdown>{content}</ReactMarkdown>
     </div>
   );
-};
+});
+StreamMessage.displayName = 'StreamMessage';
 
-const WelcomeHero: React.FC = () => {
+const WelcomeHero = memo(() => {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     scaleIn(ref.current, { from: 0.98, y: 16, duration: duration.smooth, ease: ease.butter });
@@ -113,7 +113,8 @@ const WelcomeHero: React.FC = () => {
       <p>Ask me anything about what's on your screen.</p>
     </div>
   );
-};
+});
+WelcomeHero.displayName = 'WelcomeHero';
 
 const App: React.FC = () => {
   const [input, setInput] = useState('');
@@ -128,9 +129,11 @@ const App: React.FC = () => {
   useEffect(() => {
     createSession();
   }, [createSession]);
+
   useEffect(() => {
     return window.electron?.window.onShown(() => console.log('Window shown'));
   }, []);
+
   useEffect(() => {
     window.electron?.window.resize(
       showTranscript ? DEFAULT_WIDTH + TRANSCRIPT_WIDTH : DEFAULT_WIDTH,
@@ -138,11 +141,27 @@ const App: React.FC = () => {
     );
   }, [showTranscript]);
 
-  const handleSend = () => {
+  const handleSend = useCallback(() => {
     if (!input.trim() || status !== 'connected') return;
     sendMessage(input);
     setInput('');
-  };
+  }, [input, status, sendMessage]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        handleSend();
+      }
+    },
+    [handleSend]
+  );
+
+  const toggleTranscript = useCallback(() => setShowTranscript((prev) => !prev), []);
+  const captureScreen = useCallback(
+    () => fetch(`${API_BASE}/api/capture`).catch(console.error),
+    []
+  );
 
   return (
     <div className="app-container">
@@ -162,17 +181,13 @@ const App: React.FC = () => {
           <div className="header-right no-drag" style={{ display: 'flex', gap: '8px' }}>
             <MicButton />
             <button
-              onClick={() => setShowTranscript(!showTranscript)}
+              onClick={toggleTranscript}
               className={`icon-btn ${showTranscript ? 'active' : ''}`}
               title="Toggle Live Transcript"
             >
               <FileText size={20} />
             </button>
-            <button
-              onClick={() => fetch(`${API_BASE}/api/capture`).catch(console.error)}
-              className="icon-btn capture-btn"
-              title="Capture Screen"
-            >
+            <button onClick={captureScreen} className="icon-btn capture-btn" title="Capture Screen">
               <Camera size={20} />
             </button>
           </div>
@@ -215,9 +230,7 @@ const App: React.FC = () => {
             <textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) =>
-                e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())
-              }
+              onKeyDown={handleKeyDown}
               placeholder="Type a message..."
               rows={1}
             />
