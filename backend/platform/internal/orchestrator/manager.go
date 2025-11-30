@@ -57,6 +57,7 @@ type Manager struct {
 	mu        sync.RWMutex
 	recording bool
 	stopCh    chan struct{}
+	mainCtx   context.Context
 }
 
 // New creates a new manager.
@@ -80,7 +81,7 @@ func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 		autoAnswerChan: make(chan AutoAnswerEvent, AutoAnswerChannelBuffer),
 		vadChan:        make(chan VADEvent, VADChannelBuffer),
 		memBatcher:     memBatcher,
-		recording:      true,
+		recording:      false,
 		stopCh:         make(chan struct{}),
 	}
 
@@ -215,11 +216,40 @@ func (m *Manager) streamAutoAnswer(ctx context.Context, question string) {
 
 // Start begins orchestration.
 func (m *Manager) Start(ctx context.Context) error {
+	m.mu.Lock()
+	m.mainCtx = ctx
+	m.mu.Unlock()
+
 	log := trace.Logger(ctx)
+
 	if m.audioCap != nil {
-		if err := m.audioCap.Start(ctx); err != nil {
-			log.Warn("audio capture start failed", "error", err)
-		}
+		// Delay audio initialization to allow other services (like WebSockets) to stabilize.
+		// Start immediately if recording is already enabled, otherwise wait 10s.
+		go func() {
+			// Initial check
+			m.mu.RLock()
+			recording := m.recording
+			m.mu.RUnlock()
+
+			if recording {
+				if err := m.audioCap.Start(ctx); err != nil {
+					log.Warn("audio capture start failed", "error", err)
+				}
+			} else {
+				// Wait for 10s or unmute
+				select {
+				case <-ctx.Done():
+					return
+				case <-m.stopCh:
+					return
+				case <-time.After(10 * time.Second):
+					if err := m.audioCap.Start(ctx); err != nil {
+						log.Warn("delayed audio capture start failed", "error", err)
+					}
+				}
+			}
+		}()
+
 		go m.audioLoop(ctx)
 	}
 
@@ -330,6 +360,7 @@ func (m *Manager) Stop() {
 	close(m.stopCh)
 	if m.audioCap != nil {
 		m.audioCap.Stop()
+		m.audioCap.Close()
 	}
 	if m.audioProc != nil {
 		m.audioProc.Reset()
@@ -358,9 +389,17 @@ func (m *Manager) GetLatestScreenImage() []byte {
 func (m *Manager) SetRecording(enabled bool) {
 	m.mu.Lock()
 	m.recording = enabled
+	ctx := m.mainCtx
 	m.mu.Unlock()
+
 	m.screenProc.SetRecording(enabled)
 	trace.Logger(context.Background()).Info("recording state changed", "enabled", enabled)
+
+	if enabled && m.audioCap != nil && ctx != nil {
+		if err := m.audioCap.Start(ctx); err != nil {
+			trace.Logger(ctx).Warn("failed to start audio capture on unmute", "error", err)
+		}
+	}
 }
 
 // SetAutoAnswer enables/disables auto-answering.

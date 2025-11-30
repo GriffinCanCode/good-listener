@@ -16,9 +16,23 @@ load_dotenv()
 
 import app.pb.cognition_pb2 as pb
 import app.pb.cognition_pb2_grpc as pb_grpc
-from app.core import TraceContext, TracingInterceptor, get_config, get_logger, set_trace_context, span
-from app.services.constants import DIARIZATION_MIN_SPEAKERS, SAMPLES_PER_SECOND
+from app.core import (
+    AppError,
+    ErrorCode,
+    LLMError,
+    MemoryError,
+    OCRError,
+    TraceContext,
+    TracingInterceptor,
+    abort_with_error,
+    get_config,
+    get_logger,
+    handle_grpc_error,
+    set_trace_context,
+    span,
+)
 from app.services.audio import DiarizationService, TranscriptionService, VADService
+from app.services.constants import DIARIZATION_MIN_SPEAKERS, SAMPLES_PER_SECOND
 from app.services.health import create_health_servicer
 from app.services.llm import LLMService
 from app.services.memory import MemoryService
@@ -220,6 +234,35 @@ class MemoryServicer(pb_grpc.MemoryServiceServicer):
         return pb.ClearResponse(deleted_count=0)
 
 
+async def warmup_models(
+    transcription: TranscriptionServicer,
+    vad: VADServicer,
+    ocr: OCRServicer,
+    delay: float = 10.0,
+):
+    """Warm up heavy models after a delay to avoid blocking startup."""
+    try:
+        await asyncio.sleep(delay)
+        logger.info("starting_model_warmup")
+
+        # Trigger lazy loading by accessing properties
+        # Run in thread pool to avoid blocking the event loop during load
+        loop = asyncio.get_running_loop()
+        
+        await loop.run_in_executor(None, lambda: getattr(transcription.service, "model"))
+        await loop.run_in_executor(None, lambda: getattr(vad.service, "model"))
+        await loop.run_in_executor(None, lambda: getattr(ocr.service, "engine"))
+        
+        # Warm up diarization (pyannote)
+        await loop.run_in_executor(None, lambda: getattr(transcription.diarization, "pipeline"))
+
+        logger.info("model_warmup_complete")
+    except asyncio.CancelledError:
+        logger.info("model_warmup_cancelled")
+    except Exception as e:
+        logger.warning("model_warmup_failed", error=str(e))
+
+
 async def serve(port: int | None = None):
     """Start the gRPC server immediately. Models lazy-load on first use."""
     import os
@@ -248,8 +291,14 @@ async def serve(port: int | None = None):
     pb_grpc.add_LLMServiceServicer_to_server(llm_servicer, server)
     pb_grpc.add_MemoryServiceServicer_to_server(memory_servicer, server)
 
-    # Health check returns SERVING immediately
-    health_pb2_grpc.add_HealthServicer_to_server(create_health_servicer(), server)
+    # Health check with live/ready endpoints and model availability validation
+    health_servicer = create_health_servicer(
+        transcription_svc=transcription_servicer.service,
+        vad_svc=vad_servicer.service,
+        ocr_svc=ocr_servicer.service,
+        llm_svc=llm_servicer.service,
+    )
+    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
 
     addr = f"[::]:{port}"
     server.add_insecure_port(addr)
@@ -268,7 +317,21 @@ async def serve(port: int | None = None):
     logger.info("grpc_server_starting", addr=addr)
     await server.start()
 
+    # Schedule background warmup
+    warmup_task = loop.create_task(
+        warmup_models(transcription_servicer, vad_servicer, ocr_servicer)
+    )
+
     await shutdown_event.wait()
+    
+    # Cancel warmup if shutting down early
+    if not warmup_task.done():
+        warmup_task.cancel()
+        try:
+            await warmup_task
+        except asyncio.CancelledError:
+            pass
+
     logger.info("graceful_shutdown_initiated", grace_period=cfg.inference.grpc_shutdown_grace_period)
     await server.stop(grace=cfg.inference.grpc_shutdown_grace_period)
     logger.info("grpc_server_stopped")

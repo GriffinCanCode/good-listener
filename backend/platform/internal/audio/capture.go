@@ -255,6 +255,10 @@ func (c *Capturer) Stop() {
 	}
 	c.devices = nil
 	c.running = false
+}
+
+// Close terminates the audio system.
+func (c *Capturer) Close() {
 	_ = portaudio.Terminate()
 }
 
