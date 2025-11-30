@@ -7,12 +7,11 @@
 package pb
 
 import (
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
-
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -21,6 +20,200 @@ const (
 	// Verify that runtime/protoimpl is sufficiently up-to-date.
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
+
+// ErrorCode defines standardized error codes across Python, Go, and TypeScript.
+// Use with gRPC status details for rich error propagation.
+type ErrorCode int32
+
+const (
+	ErrorCode_ERROR_CODE_UNSPECIFIED ErrorCode = 0
+	// General errors (1-99)
+	ErrorCode_UNKNOWN          ErrorCode = 1
+	ErrorCode_INTERNAL         ErrorCode = 2
+	ErrorCode_INVALID_ARGUMENT ErrorCode = 3
+	ErrorCode_NOT_FOUND        ErrorCode = 4
+	ErrorCode_UNAVAILABLE      ErrorCode = 5
+	ErrorCode_TIMEOUT          ErrorCode = 6
+	ErrorCode_CANCELLED        ErrorCode = 7
+	// Audio domain (100-199)
+	ErrorCode_AUDIO_INVALID_FORMAT       ErrorCode = 100
+	ErrorCode_AUDIO_EMPTY_INPUT          ErrorCode = 101
+	ErrorCode_AUDIO_TRANSCRIPTION_FAILED ErrorCode = 102
+	ErrorCode_AUDIO_VAD_FAILED           ErrorCode = 103
+	ErrorCode_AUDIO_DIARIZATION_FAILED   ErrorCode = 104
+	ErrorCode_AUDIO_MODEL_LOAD_FAILED    ErrorCode = 105
+	// LLM domain (200-299)
+	ErrorCode_LLM_NOT_CONFIGURED   ErrorCode = 200
+	ErrorCode_LLM_API_ERROR        ErrorCode = 201
+	ErrorCode_LLM_RATE_LIMITED     ErrorCode = 202
+	ErrorCode_LLM_CONTEXT_TOO_LONG ErrorCode = 203
+	ErrorCode_LLM_INVALID_RESPONSE ErrorCode = 204
+	// Memory domain (300-399)
+	ErrorCode_MEMORY_STORE_FAILED   ErrorCode = 300
+	ErrorCode_MEMORY_QUERY_FAILED   ErrorCode = 301
+	ErrorCode_MEMORY_POOL_EXHAUSTED ErrorCode = 302
+	ErrorCode_MEMORY_INIT_FAILED    ErrorCode = 303
+	// OCR domain (400-499)
+	ErrorCode_OCR_INIT_FAILED    ErrorCode = 400
+	ErrorCode_OCR_EXTRACT_FAILED ErrorCode = 401
+	ErrorCode_OCR_INVALID_IMAGE  ErrorCode = 402
+	// Config domain (500-599)
+	ErrorCode_CONFIG_INVALID ErrorCode = 500
+	ErrorCode_CONFIG_MISSING ErrorCode = 501
+)
+
+// Enum value maps for ErrorCode.
+var (
+	ErrorCode_name = map[int32]string{
+		0:   "ERROR_CODE_UNSPECIFIED",
+		1:   "UNKNOWN",
+		2:   "INTERNAL",
+		3:   "INVALID_ARGUMENT",
+		4:   "NOT_FOUND",
+		5:   "UNAVAILABLE",
+		6:   "TIMEOUT",
+		7:   "CANCELLED",
+		100: "AUDIO_INVALID_FORMAT",
+		101: "AUDIO_EMPTY_INPUT",
+		102: "AUDIO_TRANSCRIPTION_FAILED",
+		103: "AUDIO_VAD_FAILED",
+		104: "AUDIO_DIARIZATION_FAILED",
+		105: "AUDIO_MODEL_LOAD_FAILED",
+		200: "LLM_NOT_CONFIGURED",
+		201: "LLM_API_ERROR",
+		202: "LLM_RATE_LIMITED",
+		203: "LLM_CONTEXT_TOO_LONG",
+		204: "LLM_INVALID_RESPONSE",
+		300: "MEMORY_STORE_FAILED",
+		301: "MEMORY_QUERY_FAILED",
+		302: "MEMORY_POOL_EXHAUSTED",
+		303: "MEMORY_INIT_FAILED",
+		400: "OCR_INIT_FAILED",
+		401: "OCR_EXTRACT_FAILED",
+		402: "OCR_INVALID_IMAGE",
+		500: "CONFIG_INVALID",
+		501: "CONFIG_MISSING",
+	}
+	ErrorCode_value = map[string]int32{
+		"ERROR_CODE_UNSPECIFIED":     0,
+		"UNKNOWN":                    1,
+		"INTERNAL":                   2,
+		"INVALID_ARGUMENT":           3,
+		"NOT_FOUND":                  4,
+		"UNAVAILABLE":                5,
+		"TIMEOUT":                    6,
+		"CANCELLED":                  7,
+		"AUDIO_INVALID_FORMAT":       100,
+		"AUDIO_EMPTY_INPUT":          101,
+		"AUDIO_TRANSCRIPTION_FAILED": 102,
+		"AUDIO_VAD_FAILED":           103,
+		"AUDIO_DIARIZATION_FAILED":   104,
+		"AUDIO_MODEL_LOAD_FAILED":    105,
+		"LLM_NOT_CONFIGURED":         200,
+		"LLM_API_ERROR":              201,
+		"LLM_RATE_LIMITED":           202,
+		"LLM_CONTEXT_TOO_LONG":       203,
+		"LLM_INVALID_RESPONSE":       204,
+		"MEMORY_STORE_FAILED":        300,
+		"MEMORY_QUERY_FAILED":        301,
+		"MEMORY_POOL_EXHAUSTED":      302,
+		"MEMORY_INIT_FAILED":         303,
+		"OCR_INIT_FAILED":            400,
+		"OCR_EXTRACT_FAILED":         401,
+		"OCR_INVALID_IMAGE":          402,
+		"CONFIG_INVALID":             500,
+		"CONFIG_MISSING":             501,
+	}
+)
+
+func (x ErrorCode) Enum() *ErrorCode {
+	p := new(ErrorCode)
+	*p = x
+	return p
+}
+
+func (x ErrorCode) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (ErrorCode) Descriptor() protoreflect.EnumDescriptor {
+	return file_cognition_proto_enumTypes[0].Descriptor()
+}
+
+func (ErrorCode) Type() protoreflect.EnumType {
+	return &file_cognition_proto_enumTypes[0]
+}
+
+func (x ErrorCode) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use ErrorCode.Descriptor instead.
+func (ErrorCode) EnumDescriptor() ([]byte, []int) {
+	return file_cognition_proto_rawDescGZIP(), []int{0}
+}
+
+// ErrorDetail provides structured error information for client-side handling.
+// Embed in gRPC status details using google.rpc.Status.details.
+type ErrorDetail struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          ErrorCode              `protobuf:"varint,1,opt,name=code,proto3,enum=cognition.ErrorCode" json:"code,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,3,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Additional context (e.g., field names, limits)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ErrorDetail) Reset() {
+	*x = ErrorDetail{}
+	mi := &file_cognition_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ErrorDetail) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ErrorDetail) ProtoMessage() {}
+
+func (x *ErrorDetail) ProtoReflect() protoreflect.Message {
+	mi := &file_cognition_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ErrorDetail.ProtoReflect.Descriptor instead.
+func (*ErrorDetail) Descriptor() ([]byte, []int) {
+	return file_cognition_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *ErrorDetail) GetCode() ErrorCode {
+	if x != nil {
+		return x.Code
+	}
+	return ErrorCode_ERROR_CODE_UNSPECIFIED
+}
+
+func (x *ErrorDetail) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *ErrorDetail) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
 
 type TranscribeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -33,7 +226,7 @@ type TranscribeRequest struct {
 
 func (x *TranscribeRequest) Reset() {
 	*x = TranscribeRequest{}
-	mi := &file_cognition_proto_msgTypes[0]
+	mi := &file_cognition_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -45,7 +238,7 @@ func (x *TranscribeRequest) String() string {
 func (*TranscribeRequest) ProtoMessage() {}
 
 func (x *TranscribeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[0]
+	mi := &file_cognition_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -58,7 +251,7 @@ func (x *TranscribeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscribeRequest.ProtoReflect.Descriptor instead.
 func (*TranscribeRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{0}
+	return file_cognition_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *TranscribeRequest) GetAudioData() []byte {
@@ -93,7 +286,7 @@ type TranscribeResponse struct {
 
 func (x *TranscribeResponse) Reset() {
 	*x = TranscribeResponse{}
-	mi := &file_cognition_proto_msgTypes[1]
+	mi := &file_cognition_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -105,7 +298,7 @@ func (x *TranscribeResponse) String() string {
 func (*TranscribeResponse) ProtoMessage() {}
 
 func (x *TranscribeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[1]
+	mi := &file_cognition_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -118,7 +311,7 @@ func (x *TranscribeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscribeResponse.ProtoReflect.Descriptor instead.
 func (*TranscribeResponse) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{1}
+	return file_cognition_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *TranscribeResponse) GetText() string {
@@ -153,7 +346,7 @@ type AudioChunk struct {
 
 func (x *AudioChunk) Reset() {
 	*x = AudioChunk{}
-	mi := &file_cognition_proto_msgTypes[2]
+	mi := &file_cognition_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -165,7 +358,7 @@ func (x *AudioChunk) String() string {
 func (*AudioChunk) ProtoMessage() {}
 
 func (x *AudioChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[2]
+	mi := &file_cognition_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -178,7 +371,7 @@ func (x *AudioChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AudioChunk.ProtoReflect.Descriptor instead.
 func (*AudioChunk) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{2}
+	return file_cognition_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AudioChunk) GetData() []byte {
@@ -215,7 +408,7 @@ type TranscriptSegment struct {
 
 func (x *TranscriptSegment) Reset() {
 	*x = TranscriptSegment{}
-	mi := &file_cognition_proto_msgTypes[3]
+	mi := &file_cognition_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -227,7 +420,7 @@ func (x *TranscriptSegment) String() string {
 func (*TranscriptSegment) ProtoMessage() {}
 
 func (x *TranscriptSegment) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[3]
+	mi := &file_cognition_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -240,7 +433,7 @@ func (x *TranscriptSegment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TranscriptSegment.ProtoReflect.Descriptor instead.
 func (*TranscriptSegment) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{3}
+	return file_cognition_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *TranscriptSegment) GetText() string {
@@ -290,7 +483,7 @@ type DiarizeRequest struct {
 
 func (x *DiarizeRequest) Reset() {
 	*x = DiarizeRequest{}
-	mi := &file_cognition_proto_msgTypes[4]
+	mi := &file_cognition_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -302,7 +495,7 @@ func (x *DiarizeRequest) String() string {
 func (*DiarizeRequest) ProtoMessage() {}
 
 func (x *DiarizeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[4]
+	mi := &file_cognition_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -315,7 +508,7 @@ func (x *DiarizeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiarizeRequest.ProtoReflect.Descriptor instead.
 func (*DiarizeRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{4}
+	return file_cognition_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *DiarizeRequest) GetAudioData() []byte {
@@ -355,7 +548,7 @@ type DiarizeResponse struct {
 
 func (x *DiarizeResponse) Reset() {
 	*x = DiarizeResponse{}
-	mi := &file_cognition_proto_msgTypes[5]
+	mi := &file_cognition_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -367,7 +560,7 @@ func (x *DiarizeResponse) String() string {
 func (*DiarizeResponse) ProtoMessage() {}
 
 func (x *DiarizeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[5]
+	mi := &file_cognition_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -380,7 +573,7 @@ func (x *DiarizeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiarizeResponse.ProtoReflect.Descriptor instead.
 func (*DiarizeResponse) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{5}
+	return file_cognition_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *DiarizeResponse) GetSegments() []*SpeakerSegment {
@@ -401,7 +594,7 @@ type SpeakerSegment struct {
 
 func (x *SpeakerSegment) Reset() {
 	*x = SpeakerSegment{}
-	mi := &file_cognition_proto_msgTypes[6]
+	mi := &file_cognition_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -413,7 +606,7 @@ func (x *SpeakerSegment) String() string {
 func (*SpeakerSegment) ProtoMessage() {}
 
 func (x *SpeakerSegment) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[6]
+	mi := &file_cognition_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -426,7 +619,7 @@ func (x *SpeakerSegment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpeakerSegment.ProtoReflect.Descriptor instead.
 func (*SpeakerSegment) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{6}
+	return file_cognition_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *SpeakerSegment) GetSpeaker() string {
@@ -460,7 +653,7 @@ type OCRRequest struct {
 
 func (x *OCRRequest) Reset() {
 	*x = OCRRequest{}
-	mi := &file_cognition_proto_msgTypes[7]
+	mi := &file_cognition_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -472,7 +665,7 @@ func (x *OCRRequest) String() string {
 func (*OCRRequest) ProtoMessage() {}
 
 func (x *OCRRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[7]
+	mi := &file_cognition_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -485,7 +678,7 @@ func (x *OCRRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OCRRequest.ProtoReflect.Descriptor instead.
 func (*OCRRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{7}
+	return file_cognition_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *OCRRequest) GetImageData() []byte {
@@ -512,7 +705,7 @@ type OCRResponse struct {
 
 func (x *OCRResponse) Reset() {
 	*x = OCRResponse{}
-	mi := &file_cognition_proto_msgTypes[8]
+	mi := &file_cognition_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -524,7 +717,7 @@ func (x *OCRResponse) String() string {
 func (*OCRResponse) ProtoMessage() {}
 
 func (x *OCRResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[8]
+	mi := &file_cognition_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -537,7 +730,7 @@ func (x *OCRResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OCRResponse.ProtoReflect.Descriptor instead.
 func (*OCRResponse) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{8}
+	return file_cognition_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *OCRResponse) GetText() string {
@@ -568,7 +761,7 @@ type BoundingBox struct {
 
 func (x *BoundingBox) Reset() {
 	*x = BoundingBox{}
-	mi := &file_cognition_proto_msgTypes[9]
+	mi := &file_cognition_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -580,7 +773,7 @@ func (x *BoundingBox) String() string {
 func (*BoundingBox) ProtoMessage() {}
 
 func (x *BoundingBox) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[9]
+	mi := &file_cognition_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -593,7 +786,7 @@ func (x *BoundingBox) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BoundingBox.ProtoReflect.Descriptor instead.
 func (*BoundingBox) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{9}
+	return file_cognition_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *BoundingBox) GetX1() int32 {
@@ -648,7 +841,7 @@ type SummarizeRequest struct {
 
 func (x *SummarizeRequest) Reset() {
 	*x = SummarizeRequest{}
-	mi := &file_cognition_proto_msgTypes[10]
+	mi := &file_cognition_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -660,7 +853,7 @@ func (x *SummarizeRequest) String() string {
 func (*SummarizeRequest) ProtoMessage() {}
 
 func (x *SummarizeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[10]
+	mi := &file_cognition_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -673,7 +866,7 @@ func (x *SummarizeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SummarizeRequest.ProtoReflect.Descriptor instead.
 func (*SummarizeRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{10}
+	return file_cognition_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *SummarizeRequest) GetTranscript() string {
@@ -701,7 +894,7 @@ type SummarizeResponse struct {
 
 func (x *SummarizeResponse) Reset() {
 	*x = SummarizeResponse{}
-	mi := &file_cognition_proto_msgTypes[11]
+	mi := &file_cognition_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -713,7 +906,7 @@ func (x *SummarizeResponse) String() string {
 func (*SummarizeResponse) ProtoMessage() {}
 
 func (x *SummarizeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[11]
+	mi := &file_cognition_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -726,7 +919,7 @@ func (x *SummarizeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SummarizeResponse.ProtoReflect.Descriptor instead.
 func (*SummarizeResponse) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{11}
+	return file_cognition_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SummarizeResponse) GetSummary() string {
@@ -762,7 +955,7 @@ type AnalyzeRequest struct {
 
 func (x *AnalyzeRequest) Reset() {
 	*x = AnalyzeRequest{}
-	mi := &file_cognition_proto_msgTypes[12]
+	mi := &file_cognition_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -774,7 +967,7 @@ func (x *AnalyzeRequest) String() string {
 func (*AnalyzeRequest) ProtoMessage() {}
 
 func (x *AnalyzeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[12]
+	mi := &file_cognition_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -787,7 +980,7 @@ func (x *AnalyzeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnalyzeRequest.ProtoReflect.Descriptor instead.
 func (*AnalyzeRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{12}
+	return file_cognition_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *AnalyzeRequest) GetContextText() string {
@@ -828,7 +1021,7 @@ type AnalyzeChunk struct {
 
 func (x *AnalyzeChunk) Reset() {
 	*x = AnalyzeChunk{}
-	mi := &file_cognition_proto_msgTypes[13]
+	mi := &file_cognition_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -840,7 +1033,7 @@ func (x *AnalyzeChunk) String() string {
 func (*AnalyzeChunk) ProtoMessage() {}
 
 func (x *AnalyzeChunk) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[13]
+	mi := &file_cognition_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -853,7 +1046,7 @@ func (x *AnalyzeChunk) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AnalyzeChunk.ProtoReflect.Descriptor instead.
 func (*AnalyzeChunk) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{13}
+	return file_cognition_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *AnalyzeChunk) GetContent() string {
@@ -879,7 +1072,7 @@ type IsQuestionRequest struct {
 
 func (x *IsQuestionRequest) Reset() {
 	*x = IsQuestionRequest{}
-	mi := &file_cognition_proto_msgTypes[14]
+	mi := &file_cognition_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -891,7 +1084,7 @@ func (x *IsQuestionRequest) String() string {
 func (*IsQuestionRequest) ProtoMessage() {}
 
 func (x *IsQuestionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[14]
+	mi := &file_cognition_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -904,7 +1097,7 @@ func (x *IsQuestionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsQuestionRequest.ProtoReflect.Descriptor instead.
 func (*IsQuestionRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{14}
+	return file_cognition_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *IsQuestionRequest) GetText() string {
@@ -923,7 +1116,7 @@ type IsQuestionResponse struct {
 
 func (x *IsQuestionResponse) Reset() {
 	*x = IsQuestionResponse{}
-	mi := &file_cognition_proto_msgTypes[15]
+	mi := &file_cognition_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -935,7 +1128,7 @@ func (x *IsQuestionResponse) String() string {
 func (*IsQuestionResponse) ProtoMessage() {}
 
 func (x *IsQuestionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[15]
+	mi := &file_cognition_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -948,7 +1141,7 @@ func (x *IsQuestionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IsQuestionResponse.ProtoReflect.Descriptor instead.
 func (*IsQuestionResponse) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{15}
+	return file_cognition_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *IsQuestionResponse) GetIsQuestion() bool {
@@ -969,7 +1162,7 @@ type StoreRequest struct {
 
 func (x *StoreRequest) Reset() {
 	*x = StoreRequest{}
-	mi := &file_cognition_proto_msgTypes[16]
+	mi := &file_cognition_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -981,7 +1174,7 @@ func (x *StoreRequest) String() string {
 func (*StoreRequest) ProtoMessage() {}
 
 func (x *StoreRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[16]
+	mi := &file_cognition_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -994,7 +1187,7 @@ func (x *StoreRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoreRequest.ProtoReflect.Descriptor instead.
 func (*StoreRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{16}
+	return file_cognition_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *StoreRequest) GetText() string {
@@ -1028,7 +1221,7 @@ type StoreResponse struct {
 
 func (x *StoreResponse) Reset() {
 	*x = StoreResponse{}
-	mi := &file_cognition_proto_msgTypes[17]
+	mi := &file_cognition_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1040,7 +1233,7 @@ func (x *StoreResponse) String() string {
 func (*StoreResponse) ProtoMessage() {}
 
 func (x *StoreResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[17]
+	mi := &file_cognition_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1053,7 +1246,7 @@ func (x *StoreResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StoreResponse.ProtoReflect.Descriptor instead.
 func (*StoreResponse) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{17}
+	return file_cognition_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *StoreResponse) GetId() string {
@@ -1079,7 +1272,7 @@ type BatchStoreRequest struct {
 
 func (x *BatchStoreRequest) Reset() {
 	*x = BatchStoreRequest{}
-	mi := &file_cognition_proto_msgTypes[18]
+	mi := &file_cognition_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1091,7 +1284,7 @@ func (x *BatchStoreRequest) String() string {
 func (*BatchStoreRequest) ProtoMessage() {}
 
 func (x *BatchStoreRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[18]
+	mi := &file_cognition_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1104,7 +1297,7 @@ func (x *BatchStoreRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchStoreRequest.ProtoReflect.Descriptor instead.
 func (*BatchStoreRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{18}
+	return file_cognition_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *BatchStoreRequest) GetItems() []*StoreRequest {
@@ -1124,7 +1317,7 @@ type BatchStoreResponse struct {
 
 func (x *BatchStoreResponse) Reset() {
 	*x = BatchStoreResponse{}
-	mi := &file_cognition_proto_msgTypes[19]
+	mi := &file_cognition_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1136,7 +1329,7 @@ func (x *BatchStoreResponse) String() string {
 func (*BatchStoreResponse) ProtoMessage() {}
 
 func (x *BatchStoreResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[19]
+	mi := &file_cognition_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1149,7 +1342,7 @@ func (x *BatchStoreResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BatchStoreResponse.ProtoReflect.Descriptor instead.
 func (*BatchStoreResponse) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{19}
+	return file_cognition_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *BatchStoreResponse) GetIds() []string {
@@ -1177,7 +1370,7 @@ type QueryRequest struct {
 
 func (x *QueryRequest) Reset() {
 	*x = QueryRequest{}
-	mi := &file_cognition_proto_msgTypes[20]
+	mi := &file_cognition_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1189,7 +1382,7 @@ func (x *QueryRequest) String() string {
 func (*QueryRequest) ProtoMessage() {}
 
 func (x *QueryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[20]
+	mi := &file_cognition_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1202,7 +1395,7 @@ func (x *QueryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryRequest.ProtoReflect.Descriptor instead.
 func (*QueryRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{20}
+	return file_cognition_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *QueryRequest) GetQueryText() string {
@@ -1236,7 +1429,7 @@ type QueryResponse struct {
 
 func (x *QueryResponse) Reset() {
 	*x = QueryResponse{}
-	mi := &file_cognition_proto_msgTypes[21]
+	mi := &file_cognition_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1248,7 +1441,7 @@ func (x *QueryResponse) String() string {
 func (*QueryResponse) ProtoMessage() {}
 
 func (x *QueryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[21]
+	mi := &file_cognition_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1261,7 +1454,7 @@ func (x *QueryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryResponse.ProtoReflect.Descriptor instead.
 func (*QueryResponse) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{21}
+	return file_cognition_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *QueryResponse) GetDocuments() []string {
@@ -1286,7 +1479,7 @@ type ClearRequest struct {
 
 func (x *ClearRequest) Reset() {
 	*x = ClearRequest{}
-	mi := &file_cognition_proto_msgTypes[22]
+	mi := &file_cognition_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1298,7 +1491,7 @@ func (x *ClearRequest) String() string {
 func (*ClearRequest) ProtoMessage() {}
 
 func (x *ClearRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[22]
+	mi := &file_cognition_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1311,7 +1504,7 @@ func (x *ClearRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearRequest.ProtoReflect.Descriptor instead.
 func (*ClearRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{22}
+	return file_cognition_proto_rawDescGZIP(), []int{23}
 }
 
 type ClearResponse struct {
@@ -1323,7 +1516,7 @@ type ClearResponse struct {
 
 func (x *ClearResponse) Reset() {
 	*x = ClearResponse{}
-	mi := &file_cognition_proto_msgTypes[23]
+	mi := &file_cognition_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1335,7 +1528,7 @@ func (x *ClearResponse) String() string {
 func (*ClearResponse) ProtoMessage() {}
 
 func (x *ClearResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[23]
+	mi := &file_cognition_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1348,7 +1541,7 @@ func (x *ClearResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ClearResponse.ProtoReflect.Descriptor instead.
 func (*ClearResponse) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{23}
+	return file_cognition_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *ClearResponse) GetDeletedCount() int32 {
@@ -1368,7 +1561,7 @@ type VADRequest struct {
 
 func (x *VADRequest) Reset() {
 	*x = VADRequest{}
-	mi := &file_cognition_proto_msgTypes[24]
+	mi := &file_cognition_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1380,7 +1573,7 @@ func (x *VADRequest) String() string {
 func (*VADRequest) ProtoMessage() {}
 
 func (x *VADRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[24]
+	mi := &file_cognition_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1393,7 +1586,7 @@ func (x *VADRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VADRequest.ProtoReflect.Descriptor instead.
 func (*VADRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{24}
+	return file_cognition_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *VADRequest) GetAudioChunk() []byte {
@@ -1420,7 +1613,7 @@ type VADResponse struct {
 
 func (x *VADResponse) Reset() {
 	*x = VADResponse{}
-	mi := &file_cognition_proto_msgTypes[25]
+	mi := &file_cognition_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1432,7 +1625,7 @@ func (x *VADResponse) String() string {
 func (*VADResponse) ProtoMessage() {}
 
 func (x *VADResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[25]
+	mi := &file_cognition_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1445,7 +1638,7 @@ func (x *VADResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VADResponse.ProtoReflect.Descriptor instead.
 func (*VADResponse) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{25}
+	return file_cognition_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *VADResponse) GetSpeechProbability() float32 {
@@ -1470,7 +1663,7 @@ type ResetStateRequest struct {
 
 func (x *ResetStateRequest) Reset() {
 	*x = ResetStateRequest{}
-	mi := &file_cognition_proto_msgTypes[26]
+	mi := &file_cognition_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1482,7 +1675,7 @@ func (x *ResetStateRequest) String() string {
 func (*ResetStateRequest) ProtoMessage() {}
 
 func (x *ResetStateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[26]
+	mi := &file_cognition_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1495,7 +1688,7 @@ func (x *ResetStateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetStateRequest.ProtoReflect.Descriptor instead.
 func (*ResetStateRequest) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{26}
+	return file_cognition_proto_rawDescGZIP(), []int{27}
 }
 
 type ResetStateResponse struct {
@@ -1507,7 +1700,7 @@ type ResetStateResponse struct {
 
 func (x *ResetStateResponse) Reset() {
 	*x = ResetStateResponse{}
-	mi := &file_cognition_proto_msgTypes[27]
+	mi := &file_cognition_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1519,7 +1712,7 @@ func (x *ResetStateResponse) String() string {
 func (*ResetStateResponse) ProtoMessage() {}
 
 func (x *ResetStateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_cognition_proto_msgTypes[27]
+	mi := &file_cognition_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1532,7 +1725,7 @@ func (x *ResetStateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResetStateResponse.ProtoReflect.Descriptor instead.
 func (*ResetStateResponse) Descriptor() ([]byte, []int) {
-	return file_cognition_proto_rawDescGZIP(), []int{27}
+	return file_cognition_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *ResetStateResponse) GetSuccess() bool {
@@ -1546,7 +1739,14 @@ var File_cognition_proto protoreflect.FileDescriptor
 
 const file_cognition_proto_rawDesc = "" +
 	"\n" +
-	"\x0fcognition.proto\x12\tcognition\"o\n" +
+	"\x0fcognition.proto\x12\tcognition\"\xd0\x01\n" +
+	"\vErrorDetail\x12(\n" +
+	"\x04code\x18\x01 \x01(\x0e2\x14.cognition.ErrorCodeR\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12@\n" +
+	"\bmetadata\x18\x03 \x03(\v2$.cognition.ErrorDetail.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"o\n" +
 	"\x11TranscribeRequest\x12\x1d\n" +
 	"\n" +
 	"audio_data\x18\x01 \x01(\fR\taudioData\x12\x1f\n" +
@@ -1665,7 +1865,36 @@ const file_cognition_proto_rawDesc = "" +
 	"\tis_speech\x18\x02 \x01(\bR\bisSpeech\"\x13\n" +
 	"\x11ResetStateRequest\".\n" +
 	"\x12ResetStateResponse\x12\x18\n" +
-	"\asuccess\x18\x01 \x01(\bR\asuccess2\xf0\x01\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess*\x8a\x05\n" +
+	"\tErrorCode\x12\x1a\n" +
+	"\x16ERROR_CODE_UNSPECIFIED\x10\x00\x12\v\n" +
+	"\aUNKNOWN\x10\x01\x12\f\n" +
+	"\bINTERNAL\x10\x02\x12\x14\n" +
+	"\x10INVALID_ARGUMENT\x10\x03\x12\r\n" +
+	"\tNOT_FOUND\x10\x04\x12\x0f\n" +
+	"\vUNAVAILABLE\x10\x05\x12\v\n" +
+	"\aTIMEOUT\x10\x06\x12\r\n" +
+	"\tCANCELLED\x10\a\x12\x18\n" +
+	"\x14AUDIO_INVALID_FORMAT\x10d\x12\x15\n" +
+	"\x11AUDIO_EMPTY_INPUT\x10e\x12\x1e\n" +
+	"\x1aAUDIO_TRANSCRIPTION_FAILED\x10f\x12\x14\n" +
+	"\x10AUDIO_VAD_FAILED\x10g\x12\x1c\n" +
+	"\x18AUDIO_DIARIZATION_FAILED\x10h\x12\x1b\n" +
+	"\x17AUDIO_MODEL_LOAD_FAILED\x10i\x12\x17\n" +
+	"\x12LLM_NOT_CONFIGURED\x10\xc8\x01\x12\x12\n" +
+	"\rLLM_API_ERROR\x10\xc9\x01\x12\x15\n" +
+	"\x10LLM_RATE_LIMITED\x10\xca\x01\x12\x19\n" +
+	"\x14LLM_CONTEXT_TOO_LONG\x10\xcb\x01\x12\x19\n" +
+	"\x14LLM_INVALID_RESPONSE\x10\xcc\x01\x12\x18\n" +
+	"\x13MEMORY_STORE_FAILED\x10\xac\x02\x12\x18\n" +
+	"\x13MEMORY_QUERY_FAILED\x10\xad\x02\x12\x1a\n" +
+	"\x15MEMORY_POOL_EXHAUSTED\x10\xae\x02\x12\x17\n" +
+	"\x12MEMORY_INIT_FAILED\x10\xaf\x02\x12\x14\n" +
+	"\x0fOCR_INIT_FAILED\x10\x90\x03\x12\x17\n" +
+	"\x12OCR_EXTRACT_FAILED\x10\x91\x03\x12\x16\n" +
+	"\x11OCR_INVALID_IMAGE\x10\x92\x03\x12\x13\n" +
+	"\x0eCONFIG_INVALID\x10\xf4\x03\x12\x13\n" +
+	"\x0eCONFIG_MISSING\x10\xf5\x032\xf0\x01\n" +
 	"\x14TranscriptionService\x12I\n" +
 	"\n" +
 	"Transcribe\x12\x1c.cognition.TranscribeRequest\x1a\x1d.cognition.TranscribeResponse\x12K\n" +
@@ -1690,7 +1919,7 @@ const file_cognition_proto_rawDesc = "" +
 	"VADService\x12=\n" +
 	"\fDetectSpeech\x12\x15.cognition.VADRequest\x1a\x16.cognition.VADResponse\x12I\n" +
 	"\n" +
-	"ResetState\x12\x1c.cognition.ResetStateRequest\x1a\x1d.cognition.ResetStateResponseB*Z(github.com/GriffinCanCode/good-listener/backend/platform/pkg/pbb\x06proto3"
+	"ResetState\x12\x1c.cognition.ResetStateRequest\x1a\x1d.cognition.ResetStateResponseBAZ?github.com/GriffinCanCode/good-listener/backend/platform/pkg/pbb\x06proto3"
 
 var (
 	file_cognition_proto_rawDescOnce sync.Once
@@ -1704,74 +1933,80 @@ func file_cognition_proto_rawDescGZIP() []byte {
 	return file_cognition_proto_rawDescData
 }
 
-var file_cognition_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_cognition_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
+var file_cognition_proto_msgTypes = make([]protoimpl.MessageInfo, 31)
 var file_cognition_proto_goTypes = []any{
-	(*TranscribeRequest)(nil),  // 0: cognition.TranscribeRequest
-	(*TranscribeResponse)(nil), // 1: cognition.TranscribeResponse
-	(*AudioChunk)(nil),         // 2: cognition.AudioChunk
-	(*TranscriptSegment)(nil),  // 3: cognition.TranscriptSegment
-	(*DiarizeRequest)(nil),     // 4: cognition.DiarizeRequest
-	(*DiarizeResponse)(nil),    // 5: cognition.DiarizeResponse
-	(*SpeakerSegment)(nil),     // 6: cognition.SpeakerSegment
-	(*OCRRequest)(nil),         // 7: cognition.OCRRequest
-	(*OCRResponse)(nil),        // 8: cognition.OCRResponse
-	(*BoundingBox)(nil),        // 9: cognition.BoundingBox
-	(*SummarizeRequest)(nil),   // 10: cognition.SummarizeRequest
-	(*SummarizeResponse)(nil),  // 11: cognition.SummarizeResponse
-	(*AnalyzeRequest)(nil),     // 12: cognition.AnalyzeRequest
-	(*AnalyzeChunk)(nil),       // 13: cognition.AnalyzeChunk
-	(*IsQuestionRequest)(nil),  // 14: cognition.IsQuestionRequest
-	(*IsQuestionResponse)(nil), // 15: cognition.IsQuestionResponse
-	(*StoreRequest)(nil),       // 16: cognition.StoreRequest
-	(*StoreResponse)(nil),      // 17: cognition.StoreResponse
-	(*BatchStoreRequest)(nil),  // 18: cognition.BatchStoreRequest
-	(*BatchStoreResponse)(nil), // 19: cognition.BatchStoreResponse
-	(*QueryRequest)(nil),       // 20: cognition.QueryRequest
-	(*QueryResponse)(nil),      // 21: cognition.QueryResponse
-	(*ClearRequest)(nil),       // 22: cognition.ClearRequest
-	(*ClearResponse)(nil),      // 23: cognition.ClearResponse
-	(*VADRequest)(nil),         // 24: cognition.VADRequest
-	(*VADResponse)(nil),        // 25: cognition.VADResponse
-	(*ResetStateRequest)(nil),  // 26: cognition.ResetStateRequest
-	(*ResetStateResponse)(nil), // 27: cognition.ResetStateResponse
-	nil,                        // 28: cognition.StoreRequest.MetadataEntry
+	(ErrorCode)(0),             // 0: cognition.ErrorCode
+	(*ErrorDetail)(nil),        // 1: cognition.ErrorDetail
+	(*TranscribeRequest)(nil),  // 2: cognition.TranscribeRequest
+	(*TranscribeResponse)(nil), // 3: cognition.TranscribeResponse
+	(*AudioChunk)(nil),         // 4: cognition.AudioChunk
+	(*TranscriptSegment)(nil),  // 5: cognition.TranscriptSegment
+	(*DiarizeRequest)(nil),     // 6: cognition.DiarizeRequest
+	(*DiarizeResponse)(nil),    // 7: cognition.DiarizeResponse
+	(*SpeakerSegment)(nil),     // 8: cognition.SpeakerSegment
+	(*OCRRequest)(nil),         // 9: cognition.OCRRequest
+	(*OCRResponse)(nil),        // 10: cognition.OCRResponse
+	(*BoundingBox)(nil),        // 11: cognition.BoundingBox
+	(*SummarizeRequest)(nil),   // 12: cognition.SummarizeRequest
+	(*SummarizeResponse)(nil),  // 13: cognition.SummarizeResponse
+	(*AnalyzeRequest)(nil),     // 14: cognition.AnalyzeRequest
+	(*AnalyzeChunk)(nil),       // 15: cognition.AnalyzeChunk
+	(*IsQuestionRequest)(nil),  // 16: cognition.IsQuestionRequest
+	(*IsQuestionResponse)(nil), // 17: cognition.IsQuestionResponse
+	(*StoreRequest)(nil),       // 18: cognition.StoreRequest
+	(*StoreResponse)(nil),      // 19: cognition.StoreResponse
+	(*BatchStoreRequest)(nil),  // 20: cognition.BatchStoreRequest
+	(*BatchStoreResponse)(nil), // 21: cognition.BatchStoreResponse
+	(*QueryRequest)(nil),       // 22: cognition.QueryRequest
+	(*QueryResponse)(nil),      // 23: cognition.QueryResponse
+	(*ClearRequest)(nil),       // 24: cognition.ClearRequest
+	(*ClearResponse)(nil),      // 25: cognition.ClearResponse
+	(*VADRequest)(nil),         // 26: cognition.VADRequest
+	(*VADResponse)(nil),        // 27: cognition.VADResponse
+	(*ResetStateRequest)(nil),  // 28: cognition.ResetStateRequest
+	(*ResetStateResponse)(nil), // 29: cognition.ResetStateResponse
+	nil,                        // 30: cognition.ErrorDetail.MetadataEntry
+	nil,                        // 31: cognition.StoreRequest.MetadataEntry
 }
 var file_cognition_proto_depIdxs = []int32{
-	6,  // 0: cognition.DiarizeResponse.segments:type_name -> cognition.SpeakerSegment
-	9,  // 1: cognition.OCRResponse.boxes:type_name -> cognition.BoundingBox
-	28, // 2: cognition.StoreRequest.metadata:type_name -> cognition.StoreRequest.MetadataEntry
-	16, // 3: cognition.BatchStoreRequest.items:type_name -> cognition.StoreRequest
-	0,  // 4: cognition.TranscriptionService.Transcribe:input_type -> cognition.TranscribeRequest
-	2,  // 5: cognition.TranscriptionService.StreamTranscribe:input_type -> cognition.AudioChunk
-	4,  // 6: cognition.TranscriptionService.Diarize:input_type -> cognition.DiarizeRequest
-	7,  // 7: cognition.OCRService.ExtractText:input_type -> cognition.OCRRequest
-	12, // 8: cognition.LLMService.Analyze:input_type -> cognition.AnalyzeRequest
-	14, // 9: cognition.LLMService.IsQuestion:input_type -> cognition.IsQuestionRequest
-	10, // 10: cognition.LLMService.SummarizeTranscript:input_type -> cognition.SummarizeRequest
-	16, // 11: cognition.MemoryService.Store:input_type -> cognition.StoreRequest
-	18, // 12: cognition.MemoryService.BatchStore:input_type -> cognition.BatchStoreRequest
-	20, // 13: cognition.MemoryService.Query:input_type -> cognition.QueryRequest
-	22, // 14: cognition.MemoryService.Clear:input_type -> cognition.ClearRequest
-	24, // 15: cognition.VADService.DetectSpeech:input_type -> cognition.VADRequest
-	26, // 16: cognition.VADService.ResetState:input_type -> cognition.ResetStateRequest
-	1,  // 17: cognition.TranscriptionService.Transcribe:output_type -> cognition.TranscribeResponse
-	3,  // 18: cognition.TranscriptionService.StreamTranscribe:output_type -> cognition.TranscriptSegment
-	5,  // 19: cognition.TranscriptionService.Diarize:output_type -> cognition.DiarizeResponse
-	8,  // 20: cognition.OCRService.ExtractText:output_type -> cognition.OCRResponse
-	13, // 21: cognition.LLMService.Analyze:output_type -> cognition.AnalyzeChunk
-	15, // 22: cognition.LLMService.IsQuestion:output_type -> cognition.IsQuestionResponse
-	11, // 23: cognition.LLMService.SummarizeTranscript:output_type -> cognition.SummarizeResponse
-	17, // 24: cognition.MemoryService.Store:output_type -> cognition.StoreResponse
-	19, // 25: cognition.MemoryService.BatchStore:output_type -> cognition.BatchStoreResponse
-	21, // 26: cognition.MemoryService.Query:output_type -> cognition.QueryResponse
-	23, // 27: cognition.MemoryService.Clear:output_type -> cognition.ClearResponse
-	25, // 28: cognition.VADService.DetectSpeech:output_type -> cognition.VADResponse
-	27, // 29: cognition.VADService.ResetState:output_type -> cognition.ResetStateResponse
-	17, // [17:30] is the sub-list for method output_type
-	4,  // [4:17] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	0,  // 0: cognition.ErrorDetail.code:type_name -> cognition.ErrorCode
+	30, // 1: cognition.ErrorDetail.metadata:type_name -> cognition.ErrorDetail.MetadataEntry
+	8,  // 2: cognition.DiarizeResponse.segments:type_name -> cognition.SpeakerSegment
+	11, // 3: cognition.OCRResponse.boxes:type_name -> cognition.BoundingBox
+	31, // 4: cognition.StoreRequest.metadata:type_name -> cognition.StoreRequest.MetadataEntry
+	18, // 5: cognition.BatchStoreRequest.items:type_name -> cognition.StoreRequest
+	2,  // 6: cognition.TranscriptionService.Transcribe:input_type -> cognition.TranscribeRequest
+	4,  // 7: cognition.TranscriptionService.StreamTranscribe:input_type -> cognition.AudioChunk
+	6,  // 8: cognition.TranscriptionService.Diarize:input_type -> cognition.DiarizeRequest
+	9,  // 9: cognition.OCRService.ExtractText:input_type -> cognition.OCRRequest
+	14, // 10: cognition.LLMService.Analyze:input_type -> cognition.AnalyzeRequest
+	16, // 11: cognition.LLMService.IsQuestion:input_type -> cognition.IsQuestionRequest
+	12, // 12: cognition.LLMService.SummarizeTranscript:input_type -> cognition.SummarizeRequest
+	18, // 13: cognition.MemoryService.Store:input_type -> cognition.StoreRequest
+	20, // 14: cognition.MemoryService.BatchStore:input_type -> cognition.BatchStoreRequest
+	22, // 15: cognition.MemoryService.Query:input_type -> cognition.QueryRequest
+	24, // 16: cognition.MemoryService.Clear:input_type -> cognition.ClearRequest
+	26, // 17: cognition.VADService.DetectSpeech:input_type -> cognition.VADRequest
+	28, // 18: cognition.VADService.ResetState:input_type -> cognition.ResetStateRequest
+	3,  // 19: cognition.TranscriptionService.Transcribe:output_type -> cognition.TranscribeResponse
+	5,  // 20: cognition.TranscriptionService.StreamTranscribe:output_type -> cognition.TranscriptSegment
+	7,  // 21: cognition.TranscriptionService.Diarize:output_type -> cognition.DiarizeResponse
+	10, // 22: cognition.OCRService.ExtractText:output_type -> cognition.OCRResponse
+	15, // 23: cognition.LLMService.Analyze:output_type -> cognition.AnalyzeChunk
+	17, // 24: cognition.LLMService.IsQuestion:output_type -> cognition.IsQuestionResponse
+	13, // 25: cognition.LLMService.SummarizeTranscript:output_type -> cognition.SummarizeResponse
+	19, // 26: cognition.MemoryService.Store:output_type -> cognition.StoreResponse
+	21, // 27: cognition.MemoryService.BatchStore:output_type -> cognition.BatchStoreResponse
+	23, // 28: cognition.MemoryService.Query:output_type -> cognition.QueryResponse
+	25, // 29: cognition.MemoryService.Clear:output_type -> cognition.ClearResponse
+	27, // 30: cognition.VADService.DetectSpeech:output_type -> cognition.VADResponse
+	29, // 31: cognition.VADService.ResetState:output_type -> cognition.ResetStateResponse
+	19, // [19:32] is the sub-list for method output_type
+	6,  // [6:19] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_cognition_proto_init() }
@@ -1784,13 +2019,14 @@ func file_cognition_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_cognition_proto_rawDesc), len(file_cognition_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   29,
+			NumEnums:      1,
+			NumMessages:   31,
 			NumExtensions: 0,
 			NumServices:   5,
 		},
 		GoTypes:           file_cognition_proto_goTypes,
 		DependencyIndexes: file_cognition_proto_depIdxs,
+		EnumInfos:         file_cognition_proto_enumTypes,
 		MessageInfos:      file_cognition_proto_msgTypes,
 	}.Build()
 	File_cognition_proto = out.File

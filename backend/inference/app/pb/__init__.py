@@ -1,2 +1,36 @@
 """Generated protobuf files - regenerate with `make proto`."""
 
+from app.pb.cognition_pb2 import (
+    # Error handling
+    ErrorCode,
+    ErrorDetail,
+    # Constants for error codes (for direct access)
+    ERROR_CODE_UNSPECIFIED,
+    UNKNOWN,
+    INTERNAL,
+    INVALID_ARGUMENT,
+    NOT_FOUND,
+    UNAVAILABLE,
+    TIMEOUT,
+    CANCELLED,
+    AUDIO_INVALID_FORMAT,
+    AUDIO_EMPTY_INPUT,
+    AUDIO_TRANSCRIPTION_FAILED,
+    AUDIO_VAD_FAILED,
+    AUDIO_DIARIZATION_FAILED,
+    AUDIO_MODEL_LOAD_FAILED,
+    LLM_NOT_CONFIGURED,
+    LLM_API_ERROR,
+    LLM_RATE_LIMITED,
+    LLM_CONTEXT_TOO_LONG,
+    LLM_INVALID_RESPONSE,
+    MEMORY_STORE_FAILED,
+    MEMORY_QUERY_FAILED,
+    MEMORY_POOL_EXHAUSTED,
+    MEMORY_INIT_FAILED,
+    OCR_INIT_FAILED,
+    OCR_EXTRACT_FAILED,
+    OCR_INVALID_IMAGE,
+    CONFIG_INVALID,
+    CONFIG_MISSING,
+)

@@ -4,7 +4,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from queue import Empty, Queue
 
-from app.core import get_logger
+import app.pb.cognition_pb2 as pb
+from app.core import MemoryError, get_logger
 from app.services.constants import (
     CHUNK_ENABLED,
     CHUNK_MAX_SIZE,
@@ -51,9 +52,9 @@ class ChromaPool:
                 self._initialized = True
                 logger.info(f"ChromaPool initialized with {self._pool_size} clients")
                 return True
-            except Exception:
+            except Exception as e:
                 logger.exception("Failed to initialize ChromaPool")
-                return False
+                raise MemoryError("ChromaDB pool initialization failed", code=pb.MEMORY_INIT_FAILED, cause=e) from e
 
     @contextmanager
     def acquire(self, timeout: float = POOL_ACQUIRE_TIMEOUT):
@@ -123,15 +124,17 @@ class MemoryService:
         try:
             with self._pool.acquire() as (_, collection):
                 if not collection:
-                    return None
+                    raise MemoryError("No collection available", code=pb.MEMORY_POOL_EXHAUSTED)
                 collection.add(documents=[text], metadatas=[meta], ids=[doc_id])
                 logger.debug(f"Added memory: {doc_id}")
                 if collection.count() > MEMORY_PRUNE_THRESHOLD:
                     self._prune_smart()
             return doc_id
-        except Exception:
+        except MemoryError:
+            raise
+        except Exception as e:
             logger.exception("Error adding memory")
-            return None
+            raise MemoryError("Failed to store memory", code=pb.MEMORY_STORE_FAILED, cause=e) from e
 
     def add_memories_batch(self, items: list[tuple[str, str, dict | None]]) -> list[str]:
         """Batch add multiple memories with semantic chunking. Items are (text, source, metadata) tuples."""
@@ -291,6 +294,8 @@ class MemoryService:
                 except Exception:
                     logger.debug("Failed to update access counts", exc_info=True)
                 return res["documents"][0]
-        except Exception:
+        except MemoryError:
+            raise
+        except Exception as e:
             logger.exception("Error querying memory")
-            return []
+            raise MemoryError("Memory query failed", code=pb.MEMORY_QUERY_FAILED, cause=e) from e

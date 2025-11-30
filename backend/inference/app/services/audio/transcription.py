@@ -2,7 +2,8 @@
 
 import numpy as np
 
-from app.core import get_logger
+import app.pb.cognition_pb2 as pb
+from app.core import TranscriptionError, get_logger
 from app.services.constants import WHISPER_BEAM_SIZE
 
 logger = get_logger(__name__)
@@ -17,13 +18,23 @@ class TranscriptionService:
     def model(self):
         """Lazy-load Whisper model on first use."""
         if self._model is None:
-            from faster_whisper import WhisperModel
-            self._model = WhisperModel(self._model_size, device=self._device, compute_type=self._compute_type)
-            logger.info(f"TranscriptionService initialized: model={self._model_size}, device={self._device}")
+            try:
+                from faster_whisper import WhisperModel
+                self._model = WhisperModel(self._model_size, device=self._device, compute_type=self._compute_type)
+                logger.info(f"TranscriptionService initialized: model={self._model_size}, device={self._device}")
+            except Exception as e:
+                raise TranscriptionError("Failed to load Whisper model", code=pb.AUDIO_MODEL_LOAD_FAILED, cause=e) from e
         return self._model
 
     def transcribe(self, audio_data: np.ndarray, language: str | None = None) -> tuple[str, float]:
         """Transcribe audio to text. Args: audio_data (Float32 PCM @ 16kHz), language (optional hint). Returns: (text, confidence)."""
-        kwargs = {"beam_size": WHISPER_BEAM_SIZE, **({"language": language} if language else {})}
-        segments, info = self.model.transcribe(audio_data.flatten().astype(np.float32), **kwargs)
-        return " ".join(s.text for s in segments).strip(), getattr(info, "language_probability", 1.0)
+        if audio_data.size == 0:
+            raise TranscriptionError("Empty audio input", code=pb.AUDIO_EMPTY_INPUT)
+        try:
+            kwargs = {"beam_size": WHISPER_BEAM_SIZE, **({"language": language} if language else {})}
+            segments, info = self.model.transcribe(audio_data.flatten().astype(np.float32), **kwargs)
+            return " ".join(s.text for s in segments).strip(), getattr(info, "language_probability", 1.0)
+        except TranscriptionError:
+            raise
+        except Exception as e:
+            raise TranscriptionError("Transcription failed", code=pb.AUDIO_TRANSCRIPTION_FAILED, cause=e) from e

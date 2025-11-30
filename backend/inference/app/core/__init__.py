@@ -1,6 +1,24 @@
-"""Core utilities: logging, tracing, configuration, and shared infrastructure."""
+"""Core utilities: logging, tracing, configuration, errors, and shared infrastructure."""
 
 from app.core.config import Config, get_config, load_config
+from app.core.errors import (
+    AppError,
+    AudioError,
+    ConfigError,
+    DiarizationError,
+    ErrorCode,
+    ErrorDetails,
+    LLMError,
+    MemoryError,
+    OCRError,
+    TranscriptionError,
+    VADError,
+    abort_with_error,
+    abort_with_error_simple,
+    error_code_name,
+    handle_grpc_error,
+    wrap_error,
+)
 from app.core.logging import configure_logging, get_logger
 from app.core.trace import (
     Span,
@@ -14,17 +32,33 @@ from app.core.trace import (
 )
 
 __all__ = [
+    "AppError",
+    "AudioError",
     "Config",
+    "ConfigError",
+    "DiarizationError",
+    "ErrorCode",
+    "ErrorDetails",
+    "LLMError",
+    "MemoryError",
+    "OCRError",
     "Span",
     "TraceContext",
     "TracingInterceptor",
+    "TranscriptionError",
+    "VADError",
+    "abort_with_error",
+    "abort_with_error_simple",
     "configure_logging",
+    "error_code_name",
     "get_config",
     "get_logger",
     "get_span_id",
     "get_trace_id",
+    "handle_grpc_error",
     "load_config",
     "set_trace_context",
     "span",
     "traced",
+    "wrap_error",
 ]

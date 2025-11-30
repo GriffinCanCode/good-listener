@@ -5,6 +5,63 @@ package cognition;
 option go_package = "github.com/GriffinCanCode/good-listener/backend/platform/pkg/pb";
 
 // ============================================================================
+// Error Handling - Cross-language error codes
+// ============================================================================
+
+// ErrorCode defines standardized error codes across Python, Go, and TypeScript.
+// Use with gRPC status details for rich error propagation.
+enum ErrorCode {
+    ERROR_CODE_UNSPECIFIED = 0;
+    
+    // General errors (1-99)
+    UNKNOWN = 1;
+    INTERNAL = 2;
+    INVALID_ARGUMENT = 3;
+    NOT_FOUND = 4;
+    UNAVAILABLE = 5;
+    TIMEOUT = 6;
+    CANCELLED = 7;
+    
+    // Audio domain (100-199)
+    AUDIO_INVALID_FORMAT = 100;
+    AUDIO_EMPTY_INPUT = 101;
+    AUDIO_TRANSCRIPTION_FAILED = 102;
+    AUDIO_VAD_FAILED = 103;
+    AUDIO_DIARIZATION_FAILED = 104;
+    AUDIO_MODEL_LOAD_FAILED = 105;
+    
+    // LLM domain (200-299)
+    LLM_NOT_CONFIGURED = 200;
+    LLM_API_ERROR = 201;
+    LLM_RATE_LIMITED = 202;
+    LLM_CONTEXT_TOO_LONG = 203;
+    LLM_INVALID_RESPONSE = 204;
+    
+    // Memory domain (300-399)
+    MEMORY_STORE_FAILED = 300;
+    MEMORY_QUERY_FAILED = 301;
+    MEMORY_POOL_EXHAUSTED = 302;
+    MEMORY_INIT_FAILED = 303;
+    
+    // OCR domain (400-499)
+    OCR_INIT_FAILED = 400;
+    OCR_EXTRACT_FAILED = 401;
+    OCR_INVALID_IMAGE = 402;
+    
+    // Config domain (500-599)
+    CONFIG_INVALID = 500;
+    CONFIG_MISSING = 501;
+}
+
+// ErrorDetail provides structured error information for client-side handling.
+// Embed in gRPC status details using google.rpc.Status.details.
+message ErrorDetail {
+    ErrorCode code = 1;
+    string message = 2;
+    map<string, string> metadata = 3;  // Additional context (e.g., field names, limits)
+}
+
+// ============================================================================
 // Transcription Service - Whisper STT
 // ============================================================================
 

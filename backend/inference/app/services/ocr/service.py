@@ -3,7 +3,8 @@ import asyncio
 import numpy as np
 from PIL import Image
 
-from app.core import get_logger
+import app.pb.cognition_pb2 as pb
+from app.core import OCRError, get_logger
 
 logger = get_logger(__name__)
 
@@ -20,12 +21,13 @@ class OCRService:
                 from rapidocr_onnxruntime import RapidOCR
                 self._engine = RapidOCR()
                 logger.info("RapidOCR initialized.")
-            except Exception:
+            except Exception as e:
                 logger.exception("RapidOCR init failed")
+                raise OCRError("Failed to initialize OCR engine", code=pb.OCR_INIT_FAILED, cause=e) from e
         return self._engine
 
     def extract_text(self, image: Image.Image) -> str:
-        if not self.engine or not image:
+        if not image:
             return ""
         try:
             if not (result := self.engine(np.array(image))[0]):
@@ -35,9 +37,11 @@ class OCRService:
                 for r in result
                 if r[1]
             )
-        except Exception:
+        except OCRError:
+            raise
+        except Exception as e:
             logger.exception("OCR Error")
-            return ""
+            raise OCRError("Text extraction failed", code=pb.OCR_EXTRACT_FAILED, cause=e) from e
 
     async def extract_text_async(self, image: Image.Image) -> str:
         return "" if not image else await asyncio.get_running_loop().run_in_executor(None, self.extract_text, image)
