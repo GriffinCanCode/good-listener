@@ -30,6 +30,7 @@
   overflow-y: auto;
   position: relative;
   scroll-behavior: smooth;
+  padding: 20px;
 }
 
 .live-transcript-container.empty {
@@ -37,6 +38,7 @@
   align-items: center;
   justify-content: center;
   color: var(--text-tertiary);
+  padding: 0;
 }
 
 .empty-message {
@@ -57,19 +59,14 @@
   }
 }
 
-.transcript-list {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
 .transcript-item {
   display: flex;
   gap: 12px;
   font-size: 13px;
   position: relative;
   padding-right: 8px;
+  padding-bottom: 16px; /* Replaces gap */
+  box-sizing: border-box;
 }
 
 .transcript-icon {

@@ -21,6 +21,7 @@
     "package:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
+    "@tanstack/react-virtual": "^3.13.12",
     "gsap": "^3.13.0",
     "lucide-react": "^0.555.0",
     "react": "^18.3.1",
