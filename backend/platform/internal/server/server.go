@@ -12,6 +12,7 @@ import (
 	"github.com/coder/websocket/wsjson"
 	"github.com/good-listener/platform/internal/config"
 	"github.com/good-listener/platform/internal/orchestrator"
+	"github.com/good-listener/platform/internal/trace"
 )
 
 // Message types
@@ -22,6 +23,7 @@ type Message struct {
 type ChatMessage struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
+	TraceID string `json:"trace_id,omitempty"`
 }
 
 type TranscriptMessage struct {
@@ -79,8 +81,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/recording/start", s.handleRecordingStart)
 	mux.HandleFunc("POST /api/recording/stop", s.handleRecordingStop)
 
-	// CORS middleware
-	return corsMiddleware(mux)
+	// Apply middleware: trace -> CORS
+	return corsMiddleware(trace.Middleware(mux))
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
@@ -118,13 +120,15 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		s.mu.Unlock()
 	}()
 
-	slog.Info("websocket connected", "remote", r.RemoteAddr)
+	// Get trace context from HTTP upgrade request
+	baseCtx := r.Context()
+	log := trace.Logger(baseCtx)
+	log.Info("websocket connected", "remote", r.RemoteAddr)
 
-	ctx := r.Context()
 	for {
 		var msg json.RawMessage
-		if err := wsjson.Read(ctx, conn, &msg); err != nil {
-			slog.Debug("websocket read error", "error", err)
+		if err := wsjson.Read(baseCtx, conn, &msg); err != nil {
+			log.Debug("websocket read error", "error", err)
 			return
 		}
 
@@ -139,13 +143,26 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			if err := json.Unmarshal(msg, &chat); err != nil {
 				continue
 			}
+			// Extract trace_id from message or create new trace context
+			ctx := baseCtx
+			if chat.TraceID != "" {
+				tc := trace.Context{TraceID: chat.TraceID, SpanID: ""}
+				tc = trace.NewChild(tc)
+				ctx = trace.WithContext(ctx, tc)
+			} else {
+				ctx, _ = trace.EnsureContext(ctx)
+			}
 			s.handleChat(ctx, conn, chat.Message)
 		}
 	}
 }
 
 func (s *Server) handleChat(ctx context.Context, conn *websocket.Conn, query string) {
-	slog.Info("chat message", "query", query)
+	ctx, span := trace.StartSpan(ctx, "handle_chat")
+	defer span.End()
+
+	log := trace.Logger(ctx)
+	log.Info("chat message", "query", query)
 
 	// Send start
 	_ = wsjson.Write(ctx, conn, StartMessage{Type: "start", Role: "assistant"})
@@ -156,7 +173,8 @@ func (s *Server) handleChat(ctx context.Context, conn *websocket.Conn, query str
 	})
 
 	if err != nil {
-		slog.Error("analyze error", "error", err)
+		span.SetAttr("error", err.Error())
+		log.Error("analyze error", "error", err)
 		_ = wsjson.Write(ctx, conn, ChunkMessage{Type: "chunk", Content: "Error: " + err.Error()})
 	}
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useChatStore } from '../store/useChatStore';
+import { startTrace } from '../trace';
 
 const WS_URL = 'ws://127.0.0.1:8000/ws';
 const BACKOFF_BASE_MS = 1000;
@@ -90,6 +91,9 @@ export const useChatConnection = () => {
   const sendMessage = (content: string) => {
     if (!content.trim() || status !== 'connected') return;
 
+    // Start trace for this chat request
+    const { ctx, end } = startTrace('chat_request');
+
     // Get current state to check if first message
     const state = useChatStore.getState();
     const currentSession = state.sessions.find(s => s.id === state.currentSessionId);
@@ -98,8 +102,20 @@ export const useChatConnection = () => {
     // Optimistic update
     addMessageToCurrent({ role: 'user', content });
 
-    // Send to WS
-    ws.current?.send(JSON.stringify({ type: 'chat', message: content }));
+    // Send to WS with trace context
+    ws.current?.send(JSON.stringify({ 
+      type: 'chat', 
+      message: content,
+      trace_id: ctx.traceId,
+    }));
+
+    // End trace when response completes (via done message)
+    const originalCommit = commitStreamToMessage;
+    const tracedCommit = () => {
+      end();
+      originalCommit();
+    };
+    // Note: The trace end will be called asynchronously when 'done' is received
 
     // Update title if first message
     if (isFirstMessage) {

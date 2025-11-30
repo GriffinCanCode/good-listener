@@ -22,6 +22,13 @@ import (
 // TranscriptEvent re-exported for API compatibility
 type TranscriptEvent = transcript.Event
 
+// AutoAnswerEvent represents an auto-answer streaming event
+type AutoAnswerEvent struct {
+	Type     string // "start", "chunk", "done"
+	Question string // Only for "start"
+	Content  string // Only for "chunk"
+}
+
 // Orchestrator is an alias for Manager (backwards compatibility)
 type Orchestrator = Manager
 
@@ -30,11 +37,12 @@ type Manager struct {
 	inference *grpcclient.Client
 	cfg       *config.Config
 
-	audioCap    *audiocap.Capturer
-	audioProc   *audio.Processor
-	screenProc  *screen.Processor
-	transcripts *transcript.MemoryStore
-	autoAnswer  *autoanswer.Detector
+	audioCap       *audiocap.Capturer
+	audioProc      *audio.Processor
+	screenProc     *screen.Processor
+	transcripts    *transcript.MemoryStore
+	autoAnswer     *autoanswer.Detector
+	autoAnswerChan chan AutoAnswerEvent
 
 	mu        sync.RWMutex
 	recording bool
@@ -53,13 +61,14 @@ func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 	autoAnswerDet := autoanswer.NewDetector(inference, cfg.AutoAnswerCooldown, cfg.AutoAnswerEnabled)
 
 	m := &Manager{
-		inference:   inference,
-		cfg:         cfg,
-		audioCap:    audioCap,
-		transcripts: transcripts,
-		autoAnswer:  autoAnswerDet,
-		recording:   true,
-		stopCh:      make(chan struct{}),
+		inference:      inference,
+		cfg:            cfg,
+		audioCap:       audioCap,
+		transcripts:    transcripts,
+		autoAnswer:     autoAnswerDet,
+		autoAnswerChan: make(chan AutoAnswerEvent, 10),
+		recording:      true,
+		stopCh:         make(chan struct{}),
 	}
 
 	// Create audio processor with speech handler

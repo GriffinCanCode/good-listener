@@ -7,20 +7,15 @@ import sys
 import os
 import json
 from datetime import datetime, timezone
-from contextvars import ContextVar
-
-# Correlation ID context for request tracing
-correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=None)
 
 
-def set_correlation_id(cid: str) -> None:
-    """Set correlation ID for request tracing."""
-    correlation_id.set(cid)
-
-
-def get_correlation_id() -> str | None:
-    """Get current correlation ID."""
-    return correlation_id.get()
+def _get_trace_context() -> tuple[str | None, str | None]:
+    """Import trace module lazily to avoid circular imports."""
+    try:
+        from app.core.trace import get_trace_id, get_span_id
+        return get_trace_id(), get_span_id()
+    except ImportError:
+        return None, None
 
 
 class Colors:
@@ -67,8 +62,11 @@ class JSONFormatter(logging.Formatter):
             "msg": record.getMessage(),
         }
         
-        if cid := get_correlation_id():
-            log_data["correlation_id"] = cid
+        trace_id, span_id = _get_trace_context()
+        if trace_id:
+            log_data["trace_id"] = trace_id
+        if span_id:
+            log_data["span_id"] = span_id
         
         if record.exc_info:
             log_data["exc_info"] = self.formatException(record.exc_info)
@@ -99,8 +97,9 @@ class ColoredFormatter(logging.Formatter):
             val = record.__dict__[key]
             extra_parts.append(f"{Colors.KEY}{key}{Colors.RESET}={Colors.VALUE}{val}{Colors.RESET}")
         
-        if cid := get_correlation_id():
-            extra_parts.insert(0, f"{Colors.DIM}[{cid[:8]}]{Colors.RESET}")
+        trace_id, _ = _get_trace_context()
+        if trace_id:
+            extra_parts.insert(0, f"{Colors.DIM}[{trace_id[:8]}]{Colors.RESET}")
         
         parts = [ts_str, level_str, name_str, msg]
         if extra_parts:
@@ -196,8 +195,6 @@ configure_logging()
 
 __all__ = [
     "get_logger",
-    "set_correlation_id",
-    "get_correlation_id",
     "configure_logging",
     "StructuredLogger",
     "Colors",

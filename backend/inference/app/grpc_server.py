@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.core import get_logger
+from app.core import get_logger, TraceContext, set_trace_context, span, TracingInterceptor
 from app.services.transcription import TranscriptionService
 from app.services.vad import VADService
 from app.services.ocr import OCRService
@@ -46,9 +46,12 @@ class TranscriptionServicer(pb_grpc.TranscriptionServiceServicer):
         self.service = TranscriptionService()
 
     def Transcribe(self, request: pb.TranscribeRequest, context) -> pb.TranscribeResponse:
-        audio = np.frombuffer(request.audio_data, dtype=np.float32)
-        text, confidence = self.service.transcribe(audio, request.language or None)
-        return pb.TranscribeResponse(text=text, confidence=confidence, duration_ms=int(len(audio) / 16))
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
+        with span("transcribe", audio_len=len(request.audio_data)):
+            audio = np.frombuffer(request.audio_data, dtype=np.float32)
+            text, confidence = self.service.transcribe(audio, request.language or None)
+            return pb.TranscribeResponse(text=text, confidence=confidence, duration_ms=int(len(audio) / 16))
 
     def StreamTranscribe(self, request_iterator, context):
         """Stream transcription - accumulates chunks and transcribes on silence."""
@@ -74,11 +77,15 @@ class VADServicer(pb_grpc.VADServiceServicer):
         self.service = VADService()
 
     def DetectSpeech(self, request: pb.VADRequest, context) -> pb.VADResponse:
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
         audio = np.frombuffer(request.audio_chunk, dtype=np.float32)
         prob, is_speech = self.service.detect_speech(audio, request.sample_rate or 16000)
         return pb.VADResponse(speech_probability=prob, is_speech=is_speech)
 
     def ResetState(self, request: pb.ResetStateRequest, context) -> pb.ResetStateResponse:
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
         self.service.reset_state()
         return pb.ResetStateResponse(success=True)
 
@@ -88,8 +95,11 @@ class OCRServicer(pb_grpc.OCRServiceServicer):
         self.service = OCRService()
 
     def ExtractText(self, request: pb.OCRRequest, context) -> pb.OCRResponse:
-        image = Image.open(io.BytesIO(request.image_data))
-        text = self.service.extract_text(image)
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
+        with span("ocr_extract", image_size=len(request.image_data)):
+            image = Image.open(io.BytesIO(request.image_data))
+            text = self.service.extract_text(image)
         
         # Parse bounding boxes from OCR output format: [x1, y1, x2, y2] text
         boxes = []
@@ -99,11 +109,11 @@ class OCRServicer(pb_grpc.OCRServiceServicer):
                     coords_end = line.index("]") + 1
                     coords = [int(x) for x in line[1:coords_end-1].split(", ")]
                     box_text = line[coords_end:].strip()
-                    boxes.append(pb.BoundingBox(x1=coords[0], y1=coords[1], x2=coords[2], y2=coords[3], text=box_text))
-                except (ValueError, IndexError):
-                    pass
-        
-        return pb.OCRResponse(text=text, boxes=boxes)
+                        boxes.append(pb.BoundingBox(x1=coords[0], y1=coords[1], x2=coords[2], y2=coords[3], text=box_text))
+                    except (ValueError, IndexError):
+                        pass
+            
+            return pb.OCRResponse(text=text, boxes=boxes)
 
 
 class LLMServicer(pb_grpc.LLMServiceServicer):
@@ -115,6 +125,9 @@ class LLMServicer(pb_grpc.LLMServiceServicer):
         )
 
     async def Analyze(self, request: pb.AnalyzeRequest, context):
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
+        logger.info("llm_analyze_start", query_len=len(request.user_query))
         # Build context
         context_parts = []
         if request.transcript:
@@ -134,6 +147,8 @@ class LLMServicer(pb_grpc.LLMServiceServicer):
         yield pb.AnalyzeChunk(content="", is_final=True)
 
     def IsQuestion(self, request: pb.IsQuestionRequest, context) -> pb.IsQuestionResponse:
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
         return pb.IsQuestionResponse(is_question=is_question(request.text))
 
 
@@ -142,23 +157,31 @@ class MemoryServicer(pb_grpc.MemoryServiceServicer):
         self.service = memory_service
 
     def Store(self, request: pb.StoreRequest, context) -> pb.StoreResponse:
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
         metadata = dict(request.metadata) if request.metadata else None
         self.service.add_memory(request.text, request.source, metadata)
         return pb.StoreResponse(success=True)
 
     def Query(self, request: pb.QueryRequest, context) -> pb.QueryResponse:
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
         filter_meta = {"source": request.source_filter} if request.source_filter else None
         docs = self.service.query_memory(request.query_text, request.n_results or 5, filter_meta)
         return pb.QueryResponse(documents=docs)
 
     def Clear(self, request: pb.ClearRequest, context) -> pb.ClearResponse:
-        # Not implemented - add if needed
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
         return pb.ClearResponse(deleted_count=0)
 
 
 async def serve(port: int = 50051):
     """Start the gRPC server."""
-    server = grpc.aio.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.aio.server(
+        futures.ThreadPoolExecutor(max_workers=10),
+        interceptors=[TracingInterceptor()],
+    )
     
     memory_service = MemoryService()
     
