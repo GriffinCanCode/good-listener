@@ -1,6 +1,8 @@
 import asyncio
 import logging
-from typing import Optional
+import time
+from collections import deque
+from typing import Optional, Tuple
 from PIL import Image
 from app.services.capture import CaptureService
 from app.services.ocr import OCRService
@@ -29,12 +31,15 @@ class BackgroundMonitor:
         self._is_recording = True # Controls writing to vector DB
         self._tasks = set()
         self.transcript_queue = None
+        # Store tuples of (timestamp, text, source)
+        self.recent_transcripts: deque[Tuple[float, str, str]] = deque(maxlen=30)
         
         self.latest_insight = ""
         self.latest_text = ""
         self.latest_transcript = ""
         self.latest_image: Optional[Image.Image] = None
         self.on_insight = None
+        self.on_transcript = None # Callback for live broadcasting
 
     async def start(self):
         self._running = True
@@ -59,34 +64,50 @@ class BackgroundMonitor:
         self._tasks.clear()
         logger.info("Background monitor stopped.")
 
-    def _handle_transcript(self, text: str):
-        if self._running and self.transcript_queue:
-            self.loop.call_soon_threadsafe(self.transcript_queue.put_nowait, text)
+    def _handle_transcript(self, text: str, source: str):
+        if not self._running:
+            return
+
+        # Broadcast immediately for live UI
+        if self.on_transcript:
+            asyncio.run_coroutine_threadsafe(self.on_transcript(text, source), self.loop)
+
+        if self.transcript_queue:
+            self.loop.call_soon_threadsafe(self.transcript_queue.put_nowait, (text, source))
 
     async def _transcript_worker(self):
         while self._running:
             try:
-                text = await self.transcript_queue.get()
-                await self._process_transcript(text)
+                item = await self.transcript_queue.get()
+                await self._process_transcript(item)
                 self.transcript_queue.task_done()
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Transcript worker error: {e}")
 
-    async def _process_transcript(self, text: str):
+    async def _process_transcript(self, item: Tuple[str, str]):
+        text, source = item
         self.latest_transcript = text
+        self.recent_transcripts.append((time.time(), text, source))
         
-        # Only store significant transcripts to avoid bloat
-        # 1. Check length (ignore "Um", "Okay", etc.)
-        # 2. Check recording state
+        # Filter recent history (last 2 minutes)
+        cutoff = time.time() - 120
+        recent_history = [
+            f"{src.upper()}: {t}" 
+            for ts, t, src in self.recent_transcripts 
+            if ts > cutoff
+        ]
+        full_transcript = "\n".join(recent_history)
+        
+        # Only store significant transcripts
         if self._is_recording and len(text.split()) >= 4:
-            self.memory_service.add_memory(text, "audio")
+            self.memory_service.add_memory(f"{source.upper()}: {text}", "audio")
         
         screen_ctx = self.latest_text[:500] if self.latest_text else "No readable text."
         
         response = ""
-        async for chunk in self.llm_service.monitor_chat(text, screen_ctx, self.latest_image):
+        async for chunk in self.llm_service.monitor_chat(full_transcript, screen_ctx, self.latest_image):
             response += chunk
         
         if response and "NO_RESPONSE" not in response:
@@ -108,25 +129,20 @@ class BackgroundMonitor:
                     current_hash = hash(small_img.tobytes())
 
                     if current_hash == last_visual_hash:
-                        # Screen hasn't changed visually, skip expensive OCR
                         await asyncio.sleep(0.5)
                         continue
                     
                     last_visual_hash = current_hash
                     self.latest_image = image
                     
-                    # Visual change detected, run OCR
                     text = await self.ocr_service.extract_text_async(image)
                     
-                    # Update latest text immediately if changed
                     if text != self.latest_text:
                          self.latest_text = text
                          consecutive_stable_checks = 0
                     else:
                         consecutive_stable_checks += 1
 
-                    # Store only if stable for a few cycles and different from what we last stored
-                    # and contains enough content
                     if (self._is_recording and 
                         consecutive_stable_checks >= 2 and 
                         text != last_stored_text and 
@@ -134,13 +150,11 @@ class BackgroundMonitor:
                         
                         self.memory_service.add_memory(text, "screen")
                         last_stored_text = text
-                        # Reset check count to avoid spamming the same memory
                         consecutive_stable_checks = 0
                         
             except Exception as e:
                 logger.error(f"Screen loop error: {e}")
             
-            # Adaptive polling: faster when active
             await asyncio.sleep(1)
 
     def set_recording(self, active: bool):
