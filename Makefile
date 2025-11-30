@@ -1,6 +1,6 @@
 .PHONY: all proto inference platform frontend dev clean test install help \
         backend-proto backend-inference backend-platform backend-test backend-install backend-clean \
-        backend-e2e-test backend-proto-test backend-test-all
+        backend-e2e-test backend-proto-test backend-test-all backend-start
 
 # Default target
 all: backend-proto backend-platform
@@ -47,6 +47,9 @@ backend-install:
 
 backend-clean:
 	@$(MAKE) -C backend clean
+
+backend-start:
+	@$(MAKE) -C backend start
 
 # Aliases for convenience
 proto: backend-proto
@@ -116,7 +119,8 @@ help:
 	@echo "  make proto                - Generate protobuf files"
 	@echo ""
 	@echo "Development:"
-	@echo "  make dev                  - Start all services"
+	@echo "  make dev                  - Start all services (backend + frontend)"
+	@echo "  make backend-start        - Start backend only (inference + platform)"
 	@echo "  make inference            - Start Python inference gRPC server (port 50051)"
 	@echo "  make platform             - Build and start Go platform server (port 8000)"
 	@echo "  make backend-platform-dev - Run Go platform in dev mode"
