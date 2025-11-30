@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/good-listener/platform/internal/resilience"
+	"github.com/good-listener/platform/internal/trace"
 	pb "github.com/good-listener/platform/pkg/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -80,6 +81,8 @@ func NewWithConfig(addr string, cfg ClientConfig) (*Client, error) {
 			PermitWithoutStream: true,
 		}),
 		grpc.WithDefaultServiceConfig(`{"healthCheckConfig":{"serviceName":""}}`),
+		grpc.WithUnaryInterceptor(trace.UnaryClientInterceptor()),
+		grpc.WithStreamInterceptor(trace.StreamClientInterceptor()),
 	)
 	if err != nil {
 		return nil, err

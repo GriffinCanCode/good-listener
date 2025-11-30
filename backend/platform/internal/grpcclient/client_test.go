@@ -4,77 +4,98 @@ import (
 	"testing"
 	"time"
 
+	"github.com/good-listener/platform/internal/resilience"
 	pb "github.com/good-listener/platform/pkg/pb"
 )
 
 func TestCircuitBreakerInitialState(t *testing.T) {
-	cb := NewCircuitBreaker()
-	if cb.State() != CircuitClosed {
-		t.Errorf("initial state = %v, want CircuitClosed", cb.State())
+	cb := resilience.New(resilience.DefaultConfig())
+	if cb.State() != resilience.Closed {
+		t.Errorf("initial state = %v, want Closed", cb.State())
 	}
 }
 
 func TestCircuitBreakerOpensAfterThreshold(t *testing.T) {
-	cb := &CircuitBreaker{threshold: 3, resetTimeout: time.Second, halfOpenMax: 2}
+	cb := resilience.New(resilience.Config{
+		Threshold:         3,
+		ResetTimeout:      time.Second,
+		HalfOpenSuccesses: 2,
+	})
 
 	for i := 0; i < 3; i++ {
-		cb.RecordFailure()
+		cb.Failure()
 	}
 
-	if cb.State() != CircuitOpen {
-		t.Errorf("state after %d failures = %v, want CircuitOpen", 3, cb.State())
+	if cb.State() != resilience.Open {
+		t.Errorf("state after %d failures = %v, want Open", 3, cb.State())
 	}
 }
 
 func TestCircuitBreakerRejectsWhenOpen(t *testing.T) {
-	cb := &CircuitBreaker{threshold: 1, resetTimeout: time.Hour, halfOpenMax: 1}
-	cb.RecordFailure()
+	cb := resilience.New(resilience.Config{
+		Threshold:         1,
+		ResetTimeout:      time.Hour,
+		HalfOpenSuccesses: 1,
+	})
+	cb.Failure()
 
-	if err := cb.Allow(); err != ErrCircuitOpen {
-		t.Errorf("Allow() = %v, want ErrCircuitOpen", err)
+	if err := cb.Allow(); err != resilience.ErrOpen {
+		t.Errorf("Allow() = %v, want ErrOpen", err)
 	}
 }
 
 func TestCircuitBreakerTransitionsToHalfOpen(t *testing.T) {
-	cb := &CircuitBreaker{threshold: 1, resetTimeout: time.Millisecond, halfOpenMax: 1}
-	cb.RecordFailure()
+	cb := resilience.New(resilience.Config{
+		Threshold:         1,
+		ResetTimeout:      time.Millisecond,
+		HalfOpenSuccesses: 1,
+	})
+	cb.Failure()
 
 	time.Sleep(5 * time.Millisecond)
 
 	if err := cb.Allow(); err != nil {
 		t.Errorf("Allow() after reset timeout = %v, want nil", err)
 	}
-	if cb.State() != CircuitHalfOpen {
-		t.Errorf("state after reset timeout = %v, want CircuitHalfOpen", cb.State())
+	if cb.State() != resilience.HalfOpen {
+		t.Errorf("state after reset timeout = %v, want HalfOpen", cb.State())
 	}
 }
 
 func TestCircuitBreakerClosesAfterSuccesses(t *testing.T) {
-	cb := &CircuitBreaker{threshold: 1, resetTimeout: time.Millisecond, halfOpenMax: 2}
-	cb.RecordFailure()
+	cb := resilience.New(resilience.Config{
+		Threshold:         1,
+		ResetTimeout:      time.Millisecond,
+		HalfOpenSuccesses: 2,
+	})
+	cb.Failure()
 
 	time.Sleep(5 * time.Millisecond)
 	_ = cb.Allow() // transition to half-open
 
-	cb.RecordSuccess()
-	cb.RecordSuccess()
+	cb.Success()
+	cb.Success()
 
-	if cb.State() != CircuitClosed {
-		t.Errorf("state after successes = %v, want CircuitClosed", cb.State())
+	if cb.State() != resilience.Closed {
+		t.Errorf("state after successes = %v, want Closed", cb.State())
 	}
 }
 
 func TestCircuitBreakerReopensOnFailureInHalfOpen(t *testing.T) {
-	cb := &CircuitBreaker{threshold: 1, resetTimeout: time.Millisecond, halfOpenMax: 3}
-	cb.RecordFailure()
+	cb := resilience.New(resilience.Config{
+		Threshold:         1,
+		ResetTimeout:      time.Millisecond,
+		HalfOpenSuccesses: 3,
+	})
+	cb.Failure()
 
 	time.Sleep(5 * time.Millisecond)
 	_ = cb.Allow() // transition to half-open
 
-	cb.RecordFailure()
+	cb.Failure()
 
-	if cb.State() != CircuitOpen {
-		t.Errorf("state after failure in half-open = %v, want CircuitOpen", cb.State())
+	if cb.State() != resilience.Open {
+		t.Errorf("state after failure in half-open = %v, want Open", cb.State())
 	}
 }
 
@@ -90,8 +111,23 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.HealthCheckInterval != 5*time.Second {
 		t.Errorf("HealthCheckInterval = %v, want 5s", cfg.HealthCheckInterval)
 	}
-	if cfg.CircuitBreaker == nil {
-		t.Error("CircuitBreaker should not be nil")
+}
+
+func TestBackwardsCompatibility(t *testing.T) {
+	// Test type aliases work correctly
+	if CircuitClosed != resilience.Closed {
+		t.Error("CircuitClosed != resilience.Closed")
+	}
+	if CircuitOpen != resilience.Open {
+		t.Error("CircuitOpen != resilience.Open")
+	}
+	if CircuitHalfOpen != resilience.HalfOpen {
+		t.Error("CircuitHalfOpen != resilience.HalfOpen")
+	}
+
+	// Test error alias
+	if ErrCircuitOpen != resilience.ErrOpen {
+		t.Error("ErrCircuitOpen != resilience.ErrOpen")
 	}
 }
 
