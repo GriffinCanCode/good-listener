@@ -10,17 +10,17 @@ import (
 	screencap "github.com/good-listener/platform/internal/screen"
 )
 
-// OCRClient interface for text extraction
+// OCRClient interface for text extraction.
 type OCRClient interface {
 	ExtractText(ctx context.Context, imageData []byte, format string) (string, error)
 }
 
-// MemoryClient interface for storing screen content
+// MemoryClient interface for storing screen content.
 type MemoryClient interface {
 	StoreMemory(ctx context.Context, text, source string) error
 }
 
-// Processor handles screen capture and OCR
+// Processor handles screen capture and OCR.
 type Processor struct {
 	capturer  screencap.Capturer
 	ocr       OCRClient
@@ -31,7 +31,7 @@ type Processor struct {
 	recording bool
 }
 
-// NewProcessor creates a screen processor
+// NewProcessor creates a screen processor.
 func NewProcessor(capturer screencap.Capturer, ocr OCRClient, memory MemoryClient) *Processor {
 	return &Processor{
 		capturer:  capturer,
@@ -41,7 +41,7 @@ func NewProcessor(capturer screencap.Capturer, ocr OCRClient, memory MemoryClien
 	}
 }
 
-// Run starts the screen capture loop
+// Run starts the screen capture loop.
 func (p *Processor) Run(ctx context.Context, captureRate float64, stopCh <-chan struct{}) {
 	interval := time.Duration(float64(time.Second) / captureRate)
 	ticker := time.NewTicker(interval)
@@ -81,7 +81,7 @@ func (p *Processor) Run(ctx context.Context, captureRate float64, stopCh <-chan 
 			}
 
 			// Store stable screen text to memory
-			if p.recording && stableCount >= 2 && text != lastStoredText && len(text) > 50 {
+			if p.recording && stableCount >= StableCountThreshold && text != lastStoredText && len(text) > MinTextLengthForStorage {
 				go func(t string) { _ = p.memory.StoreMemory(ctx, t, "screen") }(text)
 				lastStoredText = text
 				stableCount = 0
@@ -91,21 +91,21 @@ func (p *Processor) Run(ctx context.Context, captureRate float64, stopCh <-chan 
 	}
 }
 
-// Text returns latest OCR text
+// Text returns latest OCR text.
 func (p *Processor) Text() string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.text
 }
 
-// Image returns latest screenshot
+// Image returns latest screenshot.
 func (p *Processor) Image() []byte {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.image
 }
 
-// SetRecording enables/disables memory recording
+// SetRecording enables/disables memory recording.
 func (p *Processor) SetRecording(enabled bool) {
 	p.mu.Lock()
 	p.recording = enabled

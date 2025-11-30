@@ -8,9 +8,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/good-listener/platform/internal/resilience"
-	"github.com/good-listener/platform/internal/trace"
-	pb "github.com/good-listener/platform/pkg/pb"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/connectivity"
@@ -18,15 +15,19 @@ import (
 	"google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
+
+	"github.com/good-listener/platform/internal/resilience"
+	"github.com/good-listener/platform/internal/trace"
+	pb "github.com/good-listener/platform/pkg/pb"
 )
 
-// Re-export for backwards compatibility
+// Re-export for backwards compatibility.
 var (
 	ErrCircuitOpen = resilience.ErrOpen
 	ErrServerDown  = errors.New("inference server unavailable")
 )
 
-// CircuitState type alias for backwards compatibility
+// CircuitState type alias for backwards compatibility.
 type CircuitState = resilience.State
 
 const (
@@ -35,7 +36,7 @@ const (
 	CircuitHalfOpen = resilience.HalfOpen
 )
 
-// ClientConfig holds client configuration
+// ClientConfig holds client configuration.
 type ClientConfig struct {
 	KeepaliveTime       time.Duration
 	KeepaliveTimeout    time.Duration
@@ -43,17 +44,17 @@ type ClientConfig struct {
 	BreakerConfig       resilience.Config
 }
 
-// DefaultConfig returns production-ready defaults
+// DefaultConfig returns production-ready defaults.
 func DefaultConfig() ClientConfig {
 	return ClientConfig{
-		KeepaliveTime:       10 * time.Second,
-		KeepaliveTimeout:    3 * time.Second,
-		HealthCheckInterval: 5 * time.Second,
+		KeepaliveTime:       DefaultKeepaliveTime,
+		KeepaliveTimeout:    DefaultKeepaliveTimeout,
+		HealthCheckInterval: DefaultHealthCheckInterval,
 		BreakerConfig:       resilience.DefaultConfig(),
 	}
 }
 
-// Client wraps all inference service clients
+// Client wraps all inference service clients.
 type Client struct {
 	conn          *grpc.ClientConn
 	Transcription pb.TranscriptionServiceClient
@@ -66,12 +67,12 @@ type Client struct {
 	healthCancel  context.CancelFunc
 }
 
-// New creates a new inference client with default config
+// New creates a new inference client with default config.
 func New(addr string) (*Client, error) {
 	return NewWithConfig(addr, DefaultConfig())
 }
 
-// NewWithConfig creates a client with custom configuration
+// NewWithConfig creates a client with custom configuration.
 func NewWithConfig(addr string, cfg ClientConfig) (*Client, error) {
 	conn, err := grpc.Dial(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -106,7 +107,7 @@ func NewWithConfig(addr string, cfg ClientConfig) (*Client, error) {
 	return c, nil
 }
 
-// monitorHealth periodically checks server health
+// monitorHealth periodically checks server health.
 func (c *Client) monitorHealth(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -123,9 +124,9 @@ func (c *Client) monitorHealth(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// checkHealth performs a health check
+// checkHealth performs a health check.
 func (c *Client) checkHealth(ctx context.Context) error {
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, HealthCheckTimeout)
 	defer cancel()
 
 	resp, err := c.Health.Check(ctx, &grpc_health_v1.HealthCheckRequest{})
@@ -141,7 +142,7 @@ func (c *Client) checkHealth(ctx context.Context) error {
 	return nil
 }
 
-// CheckHealth performs an on-demand health check
+// CheckHealth performs an on-demand health check.
 func (c *Client) CheckHealth(ctx context.Context) (bool, error) {
 	if err := c.cb.Allow(); err != nil {
 		return false, err
@@ -152,22 +153,22 @@ func (c *Client) CheckHealth(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
-// IsConnected returns true if connection is ready
+// IsConnected returns true if connection is ready.
 func (c *Client) IsConnected() bool {
 	return c.conn.GetState() == connectivity.Ready
 }
 
-// CircuitState returns current circuit breaker state
+// CircuitState returns current circuit breaker state.
 func (c *Client) CircuitState() CircuitState {
 	return c.cb.State()
 }
 
-// Breaker returns the underlying circuit breaker for advanced use
+// Breaker returns the underlying circuit breaker for advanced use.
 func (c *Client) Breaker() *resilience.Breaker {
 	return c.cb
 }
 
-// withBreaker wraps a call with circuit breaker logic
+// withBreaker wraps a call with circuit breaker logic.
 func (c *Client) withBreaker(fn func() error) error {
 	if err := c.cb.Allow(); err != nil {
 		return err
@@ -181,7 +182,7 @@ func (c *Client) withBreaker(fn func() error) error {
 	return err
 }
 
-// isTransient checks if error should trip circuit breaker
+// isTransient checks if error should trip circuit breaker.
 func isTransient(err error) bool {
 	s, ok := status.FromError(err)
 	if !ok {
@@ -195,7 +196,7 @@ func isTransient(err error) bool {
 	}
 }
 
-// Close closes the gRPC connection and stops health monitoring
+// Close closes the gRPC connection and stops health monitoring.
 func (c *Client) Close() error {
 	if c.healthCancel != nil {
 		c.healthCancel()
@@ -203,7 +204,7 @@ func (c *Client) Close() error {
 	return c.conn.Close()
 }
 
-// Transcribe sends audio for transcription
+// Transcribe sends audio for transcription.
 func (c *Client) Transcribe(ctx context.Context, audio []byte, sampleRate int32) (string, error) {
 	var result string
 	err := c.withBreaker(func() error {
@@ -220,7 +221,7 @@ func (c *Client) Transcribe(ctx context.Context, audio []byte, sampleRate int32)
 	return result, err
 }
 
-// DetectSpeech checks if audio chunk contains speech
+// DetectSpeech checks if audio chunk contains speech.
 func (c *Client) DetectSpeech(ctx context.Context, audio []byte, sampleRate int32) (float32, bool, error) {
 	var prob float32
 	var isSpeech bool
@@ -238,7 +239,7 @@ func (c *Client) DetectSpeech(ctx context.Context, audio []byte, sampleRate int3
 	return prob, isSpeech, err
 }
 
-// ResetVAD resets VAD model state
+// ResetVAD resets VAD model state.
 func (c *Client) ResetVAD(ctx context.Context) error {
 	return c.withBreaker(func() error {
 		_, err := c.VAD.ResetState(ctx, &pb.ResetStateRequest{})
@@ -246,7 +247,7 @@ func (c *Client) ResetVAD(ctx context.Context) error {
 	})
 }
 
-// ExtractText performs OCR on an image
+// ExtractText performs OCR on an image.
 func (c *Client) ExtractText(ctx context.Context, imageData []byte, format string) (string, error) {
 	var result string
 	err := c.withBreaker(func() error {
@@ -263,7 +264,7 @@ func (c *Client) ExtractText(ctx context.Context, imageData []byte, format strin
 	return result, err
 }
 
-// AnalyzeStream sends a query to the LLM and streams the response
+// AnalyzeStream sends a query to the LLM and streams the response.
 func (c *Client) AnalyzeStream(ctx context.Context, req *pb.AnalyzeRequest, onChunk func(string)) error {
 	if err := c.cb.Allow(); err != nil {
 		return err
@@ -279,7 +280,7 @@ func (c *Client) AnalyzeStream(ctx context.Context, req *pb.AnalyzeRequest, onCh
 
 	for {
 		chunk, err := stream.Recv()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			c.cb.Success()
 			return nil
 		}
@@ -295,7 +296,7 @@ func (c *Client) AnalyzeStream(ctx context.Context, req *pb.AnalyzeRequest, onCh
 	}
 }
 
-// IsQuestion checks if text is a question
+// IsQuestion checks if text is a question.
 func (c *Client) IsQuestion(ctx context.Context, text string) (bool, error) {
 	var result bool
 	err := c.withBreaker(func() error {
@@ -309,7 +310,7 @@ func (c *Client) IsQuestion(ctx context.Context, text string) (bool, error) {
 	return result, err
 }
 
-// StoreMemory stores text in vector memory
+// StoreMemory stores text in vector memory.
 func (c *Client) StoreMemory(ctx context.Context, text, source string) error {
 	err := c.withBreaker(func() error {
 		_, err := c.Memory.Store(ctx, &pb.StoreRequest{
@@ -324,7 +325,37 @@ func (c *Client) StoreMemory(ctx context.Context, text, source string) error {
 	return err
 }
 
-// QueryMemory retrieves relevant memories
+// MemoryItem represents a single memory item for batch operations.
+type MemoryItem struct {
+	Text   string
+	Source string
+}
+
+// BatchStoreMemory stores multiple texts in vector memory efficiently.
+func (c *Client) BatchStoreMemory(ctx context.Context, items []MemoryItem) (int32, error) {
+	if len(items) == 0 {
+		return 0, nil
+	}
+	var storedCount int32
+	err := c.withBreaker(func() error {
+		pbItems := make([]*pb.StoreRequest, len(items))
+		for i, item := range items {
+			pbItems[i] = &pb.StoreRequest{Text: item.Text, Source: item.Source}
+		}
+		resp, err := c.Memory.BatchStore(ctx, &pb.BatchStoreRequest{Items: pbItems})
+		if err != nil {
+			return err
+		}
+		storedCount = resp.StoredCount
+		return nil
+	})
+	if err != nil {
+		slog.Warn("failed to batch store memory", "error", err, "count", len(items))
+	}
+	return storedCount, err
+}
+
+// QueryMemory retrieves relevant memories.
 func (c *Client) QueryMemory(ctx context.Context, query string, n int32) ([]string, error) {
 	var result []string
 	err := c.withBreaker(func() error {

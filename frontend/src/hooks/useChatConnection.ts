@@ -6,6 +6,7 @@ const WS_URL = 'ws://127.0.0.1:8000/ws';
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_MAX_MS = 30000;
 const JITTER_FACTOR = 0.5;
+const SESSION_TITLE_MAX_LENGTH = 30;
 
 // WebSocket message types
 interface WsMessageStart {
@@ -168,7 +169,9 @@ export const useChatConnection = () => {
 
     // Update title if first message
     if (isFirstMessage) {
-      const title = content.slice(0, 30) + (content.length > 30 ? '...' : '');
+      const title =
+        content.slice(0, SESSION_TITLE_MAX_LENGTH) +
+        (content.length > SESSION_TITLE_MAX_LENGTH ? '...' : '');
       updateCurrentSessionTitle(title);
     }
   };

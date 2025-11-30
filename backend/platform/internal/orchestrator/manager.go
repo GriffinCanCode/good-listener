@@ -12,6 +12,7 @@ import (
 	"github.com/good-listener/platform/internal/grpcclient"
 	"github.com/good-listener/platform/internal/orchestrator/audio"
 	"github.com/good-listener/platform/internal/orchestrator/autoanswer"
+	"github.com/good-listener/platform/internal/orchestrator/memory"
 	"github.com/good-listener/platform/internal/orchestrator/screen"
 	"github.com/good-listener/platform/internal/orchestrator/transcript"
 	screencap "github.com/good-listener/platform/internal/screen"
@@ -19,20 +20,20 @@ import (
 	pb "github.com/good-listener/platform/pkg/pb"
 )
 
-// TranscriptEvent re-exported for API compatibility
+// TranscriptEvent re-exported for API compatibility.
 type TranscriptEvent = transcript.Event
 
-// AutoAnswerEvent represents an auto-answer streaming event
+// AutoAnswerEvent represents an auto-answer streaming event.
 type AutoAnswerEvent struct {
 	Type     string // "start", "chunk", "done"
 	Question string // Only for "start"
 	Content  string // Only for "chunk"
 }
 
-// Orchestrator is an alias for Manager (backwards compatibility)
+// Orchestrator is an alias for Manager (backwards compatibility).
 type Orchestrator = Manager
 
-// Manager coordinates all services
+// Manager coordinates all services.
 type Manager struct {
 	inference *grpcclient.Client
 	cfg       *config.Config
@@ -43,22 +44,24 @@ type Manager struct {
 	transcripts    *transcript.MemoryStore
 	autoAnswer     *autoanswer.Detector
 	autoAnswerChan chan AutoAnswerEvent
+	memBatcher     *memory.Batcher
 
 	mu        sync.RWMutex
 	recording bool
 	stopCh    chan struct{}
 }
 
-// New creates a new manager
+// New creates a new manager.
 func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 	log := trace.Logger(context.Background())
-	audioCap, err := audiocap.NewCapturer(cfg.SampleRate, 100, cfg.CaptureSystemAudio)
+	audioCap, err := audiocap.NewCapturer(cfg.SampleRate, AudioBufferSize, cfg.CaptureSystemAudio)
 	if err != nil {
 		log.Error("failed to create audio capturer", "error", err)
 	}
 
-	transcripts := transcript.NewStore(30, 100)
+	transcripts := transcript.NewStore(TranscriptMaxEntries, TranscriptEventBuffer)
 	autoAnswerDet := autoanswer.NewDetector(inference, cfg.AutoAnswerCooldown, cfg.AutoAnswerEnabled)
+	memBatcher := memory.NewBatcher(inference, MemoryBatcherMaxSize, MemoryBatcherFlushDelay)
 
 	m := &Manager{
 		inference:      inference,
@@ -66,7 +69,8 @@ func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 		audioCap:       audioCap,
 		transcripts:    transcripts,
 		autoAnswer:     autoAnswerDet,
-		autoAnswerChan: make(chan AutoAnswerEvent, 10),
+		autoAnswerChan: make(chan AutoAnswerEvent, AutoAnswerChannelBuffer),
+		memBatcher:     memBatcher,
 		recording:      true,
 		stopCh:         make(chan struct{}),
 	}
@@ -80,13 +84,25 @@ func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 		}, m.handleSpeech)
 	}
 
-	// Create screen processor
-	m.screenProc = screen.NewProcessor(screencap.New(), inference, inference)
+	// Create screen processor with batched memory client
+	m.screenProc = screen.NewProcessor(screencap.New(), inference, m)
 
 	return m
 }
 
-// handleSpeech processes completed speech segments
+// StoreMemory implements screen.MemoryClient using the batcher.
+func (m *Manager) StoreMemory(_ context.Context, text, source string) error {
+	m.mu.RLock()
+	recording := m.recording
+	m.mu.RUnlock()
+	if !recording {
+		return nil
+	}
+	m.memBatcher.Add(text, source)
+	return nil
+}
+
+// handleSpeech processes completed speech segments.
 func (m *Manager) handleSpeech(ctx context.Context, samples []float32, source string) {
 	ctx, span := trace.StartSpan(ctx, "handle_speech")
 	defer span.End()
@@ -112,13 +128,13 @@ func (m *Manager) handleSpeech(ctx context.Context, samples []float32, source st
 	m.transcripts.Add(text, source)
 	m.transcripts.Emit(TranscriptEvent{Text: text, Source: source})
 
-	// Store to vector DB if recording
+	// Store to vector DB if recording (batched for efficiency)
 	m.mu.RLock()
-	shouldStore := m.recording && len(strings.Fields(text)) >= 4
+	shouldStore := m.recording && len(strings.Fields(text)) >= MinWordsForMemoryStorage
 	m.mu.RUnlock()
 
 	if shouldStore {
-		_ = m.inference.StoreMemory(ctx, source+": "+text, "audio")
+		m.memBatcher.Add(source+": "+text, "audio")
 	}
 
 	// Check for auto-answer on system audio
@@ -127,17 +143,17 @@ func (m *Manager) handleSpeech(ctx context.Context, samples []float32, source st
 	}
 }
 
-// TranscriptEvents returns channel for transcript events
+// TranscriptEvents returns channel for transcript events.
 func (m *Manager) TranscriptEvents() <-chan TranscriptEvent {
 	return m.transcripts.Events()
 }
 
-// AutoAnswerEvents returns channel for auto-answer events
+// AutoAnswerEvents returns channel for auto-answer events.
 func (m *Manager) AutoAnswerEvents() <-chan AutoAnswerEvent {
 	return m.autoAnswerChan
 }
 
-// streamAutoAnswer generates and streams an LLM response for a detected question
+// streamAutoAnswer generates and streams an LLM response for a detected question.
 func (m *Manager) streamAutoAnswer(ctx context.Context, question string) {
 	ctx, span := trace.StartSpan(ctx, "stream_auto_answer")
 	defer span.End()
@@ -151,7 +167,7 @@ func (m *Manager) streamAutoAnswer(ctx context.Context, question string) {
 
 	req := &pb.AnalyzeRequest{
 		UserQuery:   "Answer this question concisely: " + question,
-		Transcript:  m.GetRecentTranscript(120),
+		Transcript:  m.GetRecentTranscript(AutoAnswerTranscriptSeconds),
 		ContextText: m.GetLatestScreenText(),
 	}
 
@@ -169,7 +185,7 @@ func (m *Manager) streamAutoAnswer(ctx context.Context, question string) {
 	m.autoAnswerChan <- AutoAnswerEvent{Type: "done"}
 }
 
-// Start begins orchestration
+// Start begins orchestration.
 func (m *Manager) Start(ctx context.Context) error {
 	log := trace.Logger(ctx)
 	if m.audioCap != nil {
@@ -199,7 +215,7 @@ func (m *Manager) audioLoop(ctx context.Context) {
 }
 
 func (m *Manager) vadCleanupLoop(ctx context.Context) {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(VADCleanupInterval)
 	defer ticker.Stop()
 
 	for {
@@ -216,7 +232,7 @@ func (m *Manager) vadCleanupLoop(ctx context.Context) {
 	}
 }
 
-// Stop stops orchestration
+// Stop stops orchestration.
 func (m *Manager) Stop() {
 	close(m.stopCh)
 	if m.audioCap != nil {
@@ -225,24 +241,27 @@ func (m *Manager) Stop() {
 	if m.audioProc != nil {
 		m.audioProc.Reset()
 	}
+	if m.memBatcher != nil {
+		m.memBatcher.Stop()
+	}
 }
 
-// GetRecentTranscript returns transcript from last N seconds
+// GetRecentTranscript returns transcript from last N seconds.
 func (m *Manager) GetRecentTranscript(seconds int) string {
 	return m.transcripts.GetRecent(seconds)
 }
 
-// GetLatestScreenText returns the latest OCR text
+// GetLatestScreenText returns the latest OCR text.
 func (m *Manager) GetLatestScreenText() string {
 	return m.screenProc.Text()
 }
 
-// GetLatestScreenImage returns the latest screenshot
+// GetLatestScreenImage returns the latest screenshot.
 func (m *Manager) GetLatestScreenImage() []byte {
 	return m.screenProc.Image()
 }
 
-// SetRecording enables/disables memory recording
+// SetRecording enables/disables memory recording.
 func (m *Manager) SetRecording(enabled bool) {
 	m.mu.Lock()
 	m.recording = enabled
@@ -251,12 +270,12 @@ func (m *Manager) SetRecording(enabled bool) {
 	trace.Logger(context.Background()).Info("recording state changed", "enabled", enabled)
 }
 
-// SetAutoAnswer enables/disables auto-answering
+// SetAutoAnswer enables/disables auto-answering.
 func (m *Manager) SetAutoAnswer(enabled bool) {
 	m.autoAnswer.SetEnabled(enabled)
 }
 
-// Analyze sends a query to the LLM
+// Analyze sends a query to the LLM.
 func (m *Manager) Analyze(ctx context.Context, query string, onChunk func(string)) error {
 	ctx, span := trace.StartSpan(ctx, "orchestrator_analyze")
 	defer span.End()
@@ -264,7 +283,7 @@ func (m *Manager) Analyze(ctx context.Context, query string, onChunk func(string
 
 	req := &pb.AnalyzeRequest{
 		UserQuery:   query,
-		Transcript:  m.GetRecentTranscript(300),
+		Transcript:  m.GetRecentTranscript(AnalyzeTranscriptSeconds),
 		ContextText: m.GetLatestScreenText(),
 		ImageData:   m.GetLatestScreenImage(),
 	}

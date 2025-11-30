@@ -10,12 +10,13 @@ import (
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
+
 	"github.com/good-listener/platform/internal/config"
 	"github.com/good-listener/platform/internal/orchestrator"
 	"github.com/good-listener/platform/internal/trace"
 )
 
-// Message types
+// Message types.
 type Message struct {
 	Type string `json:"type"`
 }
@@ -60,20 +61,17 @@ type AutoDoneMessage struct {
 	Type string `json:"type"`
 }
 
-// Server handles HTTP and WebSocket connections
+// Server handles HTTP and WebSocket connections.
 type Server struct {
-	orch *orchestrator.Orchestrator
-	cfg  *config.Config
-
+	orch  *orchestrator.Orchestrator
 	mu    sync.RWMutex
 	conns map[*websocket.Conn]struct{}
 }
 
-// New creates a new server
-func New(orch *orchestrator.Orchestrator, cfg *config.Config) *Server {
+// New creates a new server.
+func New(orch *orchestrator.Orchestrator, _ *config.Config) *Server {
 	s := &Server{
 		orch:  orch,
-		cfg:   cfg,
 		conns: make(map[*websocket.Conn]struct{}),
 	}
 
@@ -84,7 +82,7 @@ func New(orch *orchestrator.Orchestrator, cfg *config.Config) *Server {
 	return s
 }
 
-// Handler returns the HTTP handler
+// Handler returns the HTTP handler.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
@@ -123,7 +121,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		slog.Error("websocket accept error", "error", err)
 		return
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "")
+	defer func() { _ = conn.Close(websocket.StatusNormalClosure, "") }()
 
 	s.mu.Lock()
 	s.conns[conn] = struct{}{}
@@ -242,8 +240,8 @@ func (s *Server) broadcastAutoAnswers() {
 
 func (s *Server) handleCapture(w http.ResponseWriter, r *http.Request) {
 	text := s.orch.GetLatestScreenText()
-	if len(text) > 500 {
-		text = text[:500] + "..."
+	if len(text) > TextPreviewLimit {
+		text = text[:TextPreviewLimit] + "..."
 	}
 
 	json.NewEncoder(w).Encode(map[string]string{

@@ -11,7 +11,7 @@ import (
 	"github.com/gen2brain/malgo"
 )
 
-// Chunk represents a captured audio chunk
+// Chunk represents a captured audio chunk.
 type Chunk struct {
 	Data      []float32
 	DeviceID  string
@@ -19,7 +19,7 @@ type Chunk struct {
 	Timestamp int64
 }
 
-// Capturer captures audio from devices with backpressure
+// Capturer captures audio from devices with backpressure.
 type Capturer struct {
 	ctx         *malgo.AllocatedContext
 	devices     []*deviceCapture
@@ -31,12 +31,10 @@ type Capturer struct {
 }
 
 type deviceCapture struct {
-	device   *malgo.Device
-	deviceID string
-	source   string
+	device *malgo.Device
 }
 
-// NewCapturer creates a new audio capturer
+// NewCapturer creates a new audio capturer.
 func NewCapturer(sampleRate int, bufferSize int, captureSystemAudio bool) (*Capturer, error) {
 	ctx, err := malgo.InitContext(nil, malgo.ContextConfig{}, nil)
 	if err != nil {
@@ -51,12 +49,12 @@ func NewCapturer(sampleRate int, bufferSize int, captureSystemAudio bool) (*Capt
 	}, nil
 }
 
-// Output returns the channel for receiving audio chunks
+// Output returns the channel for receiving audio chunks.
 func (c *Capturer) Output() <-chan Chunk {
 	return c.outCh
 }
 
-// Start begins capturing audio from available devices
+// Start begins capturing audio from available devices.
 func (c *Capturer) Start(ctx context.Context) error {
 	c.mu.Lock()
 	if c.running {
@@ -152,43 +150,42 @@ func (c *Capturer) startDevice(ctx context.Context, info malgo.DeviceInfo, sourc
 	}
 
 	c.mu.Lock()
-	c.devices = append(c.devices, &deviceCapture{
-		device:   device,
-		deviceID: deviceID,
-		source:   source,
-	})
+	c.devices = append(c.devices, &deviceCapture{device: device})
 	c.mu.Unlock()
 
-	// Stop device when context is cancelled
+	// Stop device when context is canceled.
 	go func() {
 		<-ctx.Done()
-		device.Stop()
+		_ = device.Stop()
 		device.Uninit()
 	}()
 
 	return nil
 }
 
-// Stop stops all audio capture
+// Stop stops all audio capture.
 func (c *Capturer) Stop() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	for _, d := range c.devices {
-		d.device.Stop()
+		_ = d.device.Stop()
 		d.device.Uninit()
 	}
 	c.devices = nil
 	c.running = false
 }
 
+// Float32 byte size constant
+const float32ByteSize = 4
+
 func bytesToFloat32(b []byte) []float32 {
-	if len(b)%4 != 0 {
+	if len(b)%float32ByteSize != 0 {
 		return nil
 	}
-	samples := make([]float32, len(b)/4)
+	samples := make([]float32, len(b)/float32ByteSize)
 	for i := range samples {
-		bits := binary.LittleEndian.Uint32(b[i*4:])
+		bits := binary.LittleEndian.Uint32(b[i*float32ByteSize:])
 		samples[i] = math.Float32frombits(bits)
 	}
 	return samples
@@ -198,16 +195,19 @@ func containsIgnoreCase(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || containsIgnoreCaseImpl(s, substr))
 }
 
+// ASCII case offset ('a' - 'A')
+const asciiCaseOffset = 'a' - 'A'
+
 func containsIgnoreCaseImpl(s, substr string) bool {
 	for i := 0; i <= len(s)-len(substr); i++ {
 		match := true
 		for j := 0; j < len(substr); j++ {
 			c1, c2 := s[i+j], substr[j]
 			if c1 >= 'A' && c1 <= 'Z' {
-				c1 += 32
+				c1 += asciiCaseOffset
 			}
 			if c2 >= 'A' && c2 <= 'Z' {
-				c2 += 32
+				c2 += asciiCaseOffset
 			}
 			if c1 != c2 {
 				match = false

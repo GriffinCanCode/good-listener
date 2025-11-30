@@ -12,16 +12,16 @@ import (
 	audiocap "github.com/good-listener/platform/internal/audio"
 )
 
-// VADClient interface for speech detection
+// VADClient interface for speech detection.
 type VADClient interface {
 	DetectSpeech(ctx context.Context, audio []byte, sampleRate int32) (float32, bool, error)
 	ResetVAD(ctx context.Context) error
 }
 
-// SpeechHandler handles completed speech segments
+// SpeechHandler handles completed speech segments.
 type SpeechHandler func(ctx context.Context, audio []float32, source string)
 
-// vadState tracks VAD state per device
+// vadState tracks VAD state per device.
 type vadState struct {
 	buffer        []float32
 	speechBuffer  []float32
@@ -30,7 +30,7 @@ type vadState struct {
 	lastSeen      time.Time
 }
 
-// Config for audio processor
+// Config for audio processor.
 type Config struct {
 	SampleRate       int
 	VADThreshold     float64
@@ -38,7 +38,7 @@ type Config struct {
 	MinSpeechSamples int // Minimum samples for valid speech (e.g., sampleRate/2 for 0.5s)
 }
 
-// Processor handles audio chunks with VAD
+// Processor handles audio chunks with VAD.
 type Processor struct {
 	vad          VADClient
 	cfg          Config
@@ -48,7 +48,7 @@ type Processor struct {
 	staleTimeout time.Duration
 }
 
-// NewProcessor creates an audio processor
+// NewProcessor creates an audio processor.
 func NewProcessor(vad VADClient, cfg Config, onSpeech SpeechHandler) *Processor {
 	if cfg.MinSpeechSamples == 0 {
 		cfg.MinSpeechSamples = cfg.SampleRate / 2
@@ -58,11 +58,11 @@ func NewProcessor(vad VADClient, cfg Config, onSpeech SpeechHandler) *Processor 
 		cfg:          cfg,
 		onSpeech:     onSpeech,
 		vadState:     make(map[string]*vadState),
-		staleTimeout: 5 * time.Minute,
+		staleTimeout: StaleStateTimeout,
 	}
 }
 
-// ProcessChunk processes an audio chunk through VAD
+// ProcessChunk processes an audio chunk through VAD.
 func (p *Processor) ProcessChunk(ctx context.Context, chunk audiocap.Chunk) {
 	p.mu.Lock()
 	state, ok := p.vadState[chunk.DeviceID]
@@ -76,10 +76,10 @@ func (p *Processor) ProcessChunk(ctx context.Context, chunk audiocap.Chunk) {
 
 	state.buffer = append(state.buffer, chunk.Data...)
 
-	// Process in 512-sample VAD windows
-	for len(state.buffer) >= 512 {
-		vadChunk := state.buffer[:512]
-		state.buffer = state.buffer[512:]
+	// Process in VAD windows (512 samples required by Silero VAD)
+	for len(state.buffer) >= VADWindowSamples {
+		vadChunk := state.buffer[:VADWindowSamples]
+		state.buffer = state.buffer[VADWindowSamples:]
 
 		audioBytes := Float32ToBytes(vadChunk)
 		prob, isSpeech, err := p.vad.DetectSpeech(ctx, audioBytes, int32(p.cfg.SampleRate))
@@ -108,7 +108,7 @@ func (p *Processor) ProcessChunk(ctx context.Context, chunk audiocap.Chunk) {
 	}
 }
 
-// CleanupStale removes stale VAD state entries
+// CleanupStale removes stale VAD state entries.
 func (p *Processor) CleanupStale() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -122,18 +122,18 @@ func (p *Processor) CleanupStale() {
 	}
 }
 
-// Reset clears all VAD state
+// Reset clears all VAD state.
 func (p *Processor) Reset() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.vadState = make(map[string]*vadState)
 }
 
-// Float32ToBytes converts float32 samples to bytes
+// Float32ToBytes converts float32 samples to bytes.
 func Float32ToBytes(samples []float32) []byte {
-	buf := make([]byte, len(samples)*4)
+	buf := make([]byte, len(samples)*Float32ByteSize)
 	for i, s := range samples {
-		binary.LittleEndian.PutUint32(buf[i*4:], math.Float32bits(s))
+		binary.LittleEndian.PutUint32(buf[i*Float32ByteSize:], math.Float32bits(s))
 	}
 	return buf
 }
