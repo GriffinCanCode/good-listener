@@ -19,6 +19,7 @@ import app.pb.cognition_pb2 as pb
 import app.pb.cognition_pb2_grpc as pb_grpc
 from app.core import TraceContext, TracingInterceptor, get_logger, set_trace_context, span
 from app.services.constants import (
+    DIARIZATION_MIN_SPEAKERS,
     GRPC_DEFAULT_PORT,
     GRPC_MAX_WORKERS,
     GRPC_SHUTDOWN_GRACE_PERIOD,
@@ -28,7 +29,7 @@ from app.services.constants import (
     SCREEN_CONTEXT_MAX_LENGTH,
     VAD_DEFAULT_SAMPLE_RATE,
 )
-from app.services.audio import TranscriptionService, VADService
+from app.services.audio import DiarizationService, TranscriptionService, VADService
 from app.services.health import create_health_servicer
 from app.services.llm import LLMService
 from app.services.memory import MemoryService
@@ -54,8 +55,17 @@ def is_question(text: str) -> bool:
 
 
 class TranscriptionServicer(pb_grpc.TranscriptionServiceServicer):
-    def __init__(self):
+    def __init__(self, auth_token: str | None = None):
         self.service = TranscriptionService()
+        self._diarization: DiarizationService | None = None
+        self._auth_token = auth_token
+
+    @property
+    def diarization(self) -> DiarizationService:
+        """Lazy-load diarization service (heavy model)."""
+        if self._diarization is None:
+            self._diarization = DiarizationService(auth_token=self._auth_token)
+        return self._diarization
 
     def Transcribe(self, request: pb.TranscribeRequest, context) -> pb.TranscribeResponse:
         ctx = TraceContext.from_grpc_context(context)
@@ -83,6 +93,19 @@ class TranscriptionServicer(pb_grpc.TranscriptionServiceServicer):
                         is_final=False,
                     )
                 buffer = []
+
+    def Diarize(self, request: pb.DiarizeRequest, context) -> pb.DiarizeResponse:
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
+        with span("diarize", audio_len=len(request.audio_data)):
+            audio = np.frombuffer(request.audio_data, dtype=np.float32)
+            sample_rate = request.sample_rate or SAMPLES_PER_SECOND
+            min_speakers = request.min_speakers or DIARIZATION_MIN_SPEAKERS
+            max_speakers = request.max_speakers if request.max_speakers > 0 else None
+            segments = self.diarization.diarize(audio, sample_rate, min_speakers, max_speakers)
+            return pb.DiarizeResponse(
+                segments=[pb.SpeakerSegment(speaker=s.speaker, start_sec=s.start, end_sec=s.end) for s in segments]
+            )
 
 
 class VADServicer(pb_grpc.VADServiceServicer):
@@ -164,6 +187,13 @@ class LLMServicer(pb_grpc.LLMServiceServicer):
         set_trace_context(ctx)
         return pb.IsQuestionResponse(is_question=is_question(request.text))
 
+    async def SummarizeTranscript(self, request: pb.SummarizeRequest, context) -> pb.SummarizeResponse:
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
+        original_len = len(request.transcript)
+        summary = await self.service.summarize(request.transcript, request.max_length)
+        return pb.SummarizeResponse(summary=summary, original_length=original_len, summary_length=len(summary))
+
 
 class MemoryServicer(pb_grpc.MemoryServiceServicer):
     def __init__(self, memory_service: MemoryService):
@@ -196,6 +226,16 @@ class MemoryServicer(pb_grpc.MemoryServiceServicer):
         return pb.ClearResponse(deleted_count=0)
 
 
+def _timed_load(name: str, loader):
+    """Load a model/service and log duration."""
+    import time
+    start = time.perf_counter()
+    result = loader()
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    logger.info("model_loaded", name=name, duration_ms=round(elapsed_ms, 1))
+    return result
+
+
 async def serve(port: int = GRPC_DEFAULT_PORT):
     """Start the gRPC server with graceful shutdown."""
     server = grpc.aio.server(
@@ -203,14 +243,16 @@ async def serve(port: int = GRPC_DEFAULT_PORT):
         interceptors=[TracingInterceptor()],
     )
 
-    memory_service = MemoryService()
-
-    # Create servicers
-    transcription_servicer = TranscriptionServicer()
-    vad_servicer = VADServicer()
-    ocr_servicer = OCRServicer()
-    llm_servicer = LLMServicer(memory_service)
+    # Preload all ML models with timing
+    logger.info("preloading_models")
+    hf_token = os.getenv("HF_TOKEN")  # Hugging Face token for pyannote models
+    memory_service = _timed_load("memory", MemoryService)
+    transcription_servicer = _timed_load("transcription", lambda: TranscriptionServicer(auth_token=hf_token))
+    vad_servicer = _timed_load("vad", VADServicer)
+    ocr_servicer = _timed_load("ocr", OCRServicer)
+    llm_servicer = _timed_load("llm", lambda: LLMServicer(memory_service))
     memory_servicer = MemoryServicer(memory_service)
+    logger.info("models_preloaded")
 
     # Register services
     pb_grpc.add_TranscriptionServiceServicer_to_server(transcription_servicer, server)
