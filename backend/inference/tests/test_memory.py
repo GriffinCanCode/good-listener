@@ -89,7 +89,11 @@ class TestMemoryService:
         from app.services.memory import MemoryService
         
         mock_chromadb.count.return_value = 10001  # Over threshold
-        mock_chromadb.get.return_value = {'ids': [f"audio_{i}" for i in range(10001)]}
+        # Include metadatas for smart pruning
+        mock_chromadb.get.return_value = {
+            'ids': [f"audio_{i}" for i in range(10001)],
+            'metadatas': [{'timestamp': i, 'access_count': 0} for i in range(10001)]
+        }
         
         with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
@@ -164,23 +168,76 @@ class TestMemoryService:
             
             assert results == []
 
-    def test_prune_oldest(self, mock_chromadb):
-        """_prune_oldest removes old memories."""
+    def test_prune_smart_removes_low_importance(self, mock_chromadb):
+        """_prune_smart removes low-importance memories first."""
         from app.services.memory import MemoryService
         
-        # Create IDs with timestamps
-        old_ids = [f"audio_{1000 + i}" for i in range(6000)]
-        mock_chromadb.get.return_value = {'ids': old_ids}
+        # Create memories with varying importance
+        ids = [f"audio_{i}" for i in range(6000)]
+        metadatas = [{'timestamp': i, 'access_count': i % 10} for i in range(6000)]
+        mock_chromadb.get.return_value = {'ids': ids, 'metadatas': metadatas}
         
         with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
             
             service = MemoryService(persistence_path="/tmp/test")
-            service._prune_oldest(keep=5000)
+            service._prune_smart(keep=5000)
             
             mock_chromadb.delete.assert_called_once()
             deleted_ids = mock_chromadb.delete.call_args.kwargs['ids']
-            assert len(deleted_ids) == 1000  # 6000 - 5000 = 1000 to delete
+            assert len(deleted_ids) == 1000
+
+    def test_prune_smart_preserves_high_access(self, mock_chromadb):
+        """_prune_smart preserves frequently accessed memories."""
+        from app.services.memory import MemoryService
+        
+        # Old but frequently accessed should survive (and be protected)
+        ids = ['old_high_access', 'new_low_access']
+        metadatas = [
+            {'timestamp': 1000, 'access_count': 100},  # Old but high access (protected)
+            {'timestamp': 9999, 'access_count': 0}      # New but never accessed
+        ]
+        mock_chromadb.get.return_value = {'ids': ids, 'metadatas': metadatas}
+        # Mock uniqueness query
+        mock_chromadb.query.return_value = {
+            'ids': [['old_high_access']], 'distances': [[0.0, 0.3]]
+        }
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service._prune_smart(keep=1)
+            
+            deleted = mock_chromadb.delete.call_args.kwargs['ids']
+            # The new but low-access memory should be pruned
+            assert 'new_low_access' in deleted
+            assert 'old_high_access' not in deleted
+
+    def test_prune_smart_protects_frequently_queried(self, mock_chromadb):
+        """_prune_smart protects memories above PROTECTED_ACCESS_COUNT threshold."""
+        from app.services.memory import MemoryService
+        
+        # All have same recency, but different access counts
+        ids = ['protected_1', 'protected_2', 'pruneable']
+        metadatas = [
+            {'timestamp': 1000, 'access_count': 10},  # Protected
+            {'timestamp': 1000, 'access_count': 5},   # Protected (at threshold)
+            {'timestamp': 9999, 'access_count': 4}    # Below threshold, pruneable
+        ]
+        mock_chromadb.get.return_value = {'ids': ids, 'metadatas': metadatas}
+        mock_chromadb.query.return_value = {'ids': [[]], 'distances': [[]]}
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service._prune_smart(keep=2)
+            
+            deleted = mock_chromadb.delete.call_args.kwargs['ids']
+            assert 'pruneable' in deleted
+            assert 'protected_1' not in deleted
+            assert 'protected_2' not in deleted
 
     def test_ensure_data_dir(self):
         """_ensure_data_dir creates directory if missing."""
@@ -261,36 +318,39 @@ class TestMemoryServiceEdgeCases:
             call_args = mock_chromadb.add.call_args
             assert call_args.kwargs['metadatas'][0]['timestamp'] == 1234567890
 
-    def test_prune_oldest_no_ids(self, mock_chromadb):
-        """_prune_oldest handles empty ID list."""
+    def test_prune_smart_no_ids(self, mock_chromadb):
+        """_prune_smart handles empty ID list."""
         from app.services.memory import MemoryService
         
-        mock_chromadb.get.return_value = {'ids': []}
+        mock_chromadb.get.return_value = {'ids': [], 'metadatas': []}
         
         with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
             
             service = MemoryService(persistence_path="/tmp/test")
-            service._prune_oldest(keep=5000)
+            service._prune_smart(keep=5000)
             
             mock_chromadb.delete.assert_not_called()
 
-    def test_prune_oldest_under_threshold(self, mock_chromadb):
-        """_prune_oldest skips when under threshold."""
+    def test_prune_smart_under_threshold(self, mock_chromadb):
+        """_prune_smart skips when under threshold."""
         from app.services.memory import MemoryService
         
-        mock_chromadb.get.return_value = {'ids': [f"audio_{i}" for i in range(100)]}
+        mock_chromadb.get.return_value = {
+            'ids': [f"audio_{i}" for i in range(100)],
+            'metadatas': [{'timestamp': i, 'access_count': 0} for i in range(100)]
+        }
         
         with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
             
             service = MemoryService(persistence_path="/tmp/test")
-            service._prune_oldest(keep=5000)
+            service._prune_smart(keep=5000)
             
             mock_chromadb.delete.assert_not_called()
 
-    def test_prune_oldest_exception(self, mock_chromadb):
-        """_prune_oldest handles exceptions gracefully."""
+    def test_prune_smart_exception(self, mock_chromadb):
+        """_prune_smart handles exceptions gracefully."""
         from app.services.memory import MemoryService
         
         mock_chromadb.get.side_effect = Exception("Get failed")
@@ -300,7 +360,7 @@ class TestMemoryServiceEdgeCases:
             
             service = MemoryService(persistence_path="/tmp/test")
             # Should not raise
-            service._prune_oldest(keep=5000)
+            service._prune_smart(keep=5000)
 
 
 class TestMemoryServiceConcurrency:
@@ -338,4 +398,253 @@ class TestMemoryServiceConcurrency:
             
             call_args = mock_chromadb.query.call_args
             assert call_args.kwargs['where'] is None
+
+
+class TestImportanceScoring:
+    """Tests for importance-aware memory scoring."""
+
+    def test_compute_importance_high_access(self, mock_chromadb):
+        """High access count yields high importance score."""
+        from app.services.memory import MemoryService
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            now = time.time()
+            
+            # Old but high access
+            score, protected = service._compute_importance(
+                timestamp=now - 10000, access_count=100, uniqueness=0.5,
+                now=now, max_age=10000, max_access=100
+            )
+            # With weights: 0.25*0(recency) + 0.50*1.0(access) + 0.25*0.5(unique) = 0.625
+            assert score >= 0.5
+            assert protected  # High access = protected
+
+    def test_compute_importance_recent_low_access(self, mock_chromadb):
+        """Recent but low access yields moderate importance."""
+        from app.services.memory import MemoryService
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            now = time.time()
+            
+            # Very recent, no access
+            score, protected = service._compute_importance(
+                timestamp=now, access_count=0, uniqueness=1.0,
+                now=now, max_age=10000, max_access=100
+            )
+            # 0.25*1.0(recency) + 0.50*0(access) + 0.25*1.0(unique) = 0.5
+            assert 0.45 <= score <= 0.55
+            assert not protected
+
+    def test_compute_importance_balanced(self, mock_chromadb):
+        """Moderate recency and access yields high score."""
+        from app.services.memory import MemoryService
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            now = time.time()
+            
+            score, protected = service._compute_importance(
+                timestamp=now - 5000, access_count=50, uniqueness=0.5,
+                now=now, max_age=10000, max_access=100
+            )
+            # 0.25*0.5 + 0.50*0.5 + 0.25*0.5 = 0.5
+            assert 0.45 <= score <= 0.55
+
+    def test_compute_importance_protected_threshold(self, mock_chromadb):
+        """Memories with access_count >= PROTECTED_ACCESS_COUNT are protected."""
+        from app.services.memory import MemoryService
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            now = time.time()
+            
+            # Below threshold
+            _, protected_low = service._compute_importance(
+                timestamp=now, access_count=4, uniqueness=0.5,
+                now=now, max_age=10000, max_access=100
+            )
+            assert not protected_low
+            
+            # At threshold
+            _, protected_at = service._compute_importance(
+                timestamp=now, access_count=5, uniqueness=0.5,
+                now=now, max_age=10000, max_access=100
+            )
+            assert protected_at
+
+
+class TestAccessTracking:
+    """Tests for memory access tracking."""
+
+    def test_query_increments_access_count(self, mock_chromadb):
+        """query_memory increments access_count for retrieved memories."""
+        from app.services.memory import MemoryService
+        
+        mock_chromadb.query.return_value = {
+            'ids': [['mem_1', 'mem_2']],
+            'documents': [['Doc 1', 'Doc 2']],
+            'metadatas': [[{'access_count': 5}, {'access_count': 2}]]
+        }
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service.query_memory("test query")
+            
+            # Verify update was called for each retrieved memory
+            assert mock_chromadb.update.call_count == 2
+
+    def test_increment_access_handles_missing_count(self, mock_chromadb):
+        """_increment_access_counts handles missing access_count."""
+        from app.services.memory import MemoryService
+        
+        mock_chromadb.query.return_value = {
+            'ids': [['mem_1']],
+            'documents': [['Doc 1']],
+            'metadatas': [[{}]]  # No access_count
+        }
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service.query_memory("test")
+            
+            call_args = mock_chromadb.update.call_args
+            assert call_args.kwargs['metadatas'][0]['access_count'] == 1
+
+    def test_increment_access_exception_handling(self, mock_chromadb):
+        """_increment_access_counts handles exceptions gracefully."""
+        from app.services.memory import MemoryService
+        
+        mock_chromadb.query.return_value = {
+            'ids': [['mem_1']],
+            'documents': [['Doc 1']],
+            'metadatas': [[{'access_count': 0}]]
+        }
+        mock_chromadb.update.side_effect = Exception("Update failed")
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            # Should not raise, should still return results
+            results = service.query_memory("test")
+            assert results == ['Doc 1']
+
+
+class TestDeduplication:
+    """Tests for semantic deduplication."""
+
+    def test_prune_duplicates_removes_similar(self, mock_chromadb):
+        """_prune_duplicates removes semantically similar memories."""
+        from app.services.memory import MemoryService
+        
+        mock_chromadb.get.return_value = {
+            'ids': ['mem_1', 'mem_2'],
+            'documents': ['Hello world', 'Hello world!'],
+            'metadatas': [
+                {'timestamp': 1000, 'access_count': 10},
+                {'timestamp': 2000, 'access_count': 5}
+            ]
+        }
+        # Simulate high similarity (distance < 0.08 means similarity > 0.92)
+        mock_chromadb.query.return_value = {
+            'ids': [['mem_1', 'mem_2']],
+            'documents': [['Hello world', 'Hello world!']],
+            'metadatas': [[
+                {'timestamp': 1000, 'access_count': 10},
+                {'timestamp': 2000, 'access_count': 5}
+            ]],
+            'distances': [[0.0, 0.05]]  # 0.05 distance = 0.95 similarity
+        }
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service._prune_duplicates(sample_size=10)
+            
+            mock_chromadb.delete.assert_called_once()
+
+    def test_prune_duplicates_keeps_high_access(self, mock_chromadb):
+        """_prune_duplicates keeps the memory with higher access count."""
+        from app.services.memory import MemoryService
+        
+        mock_chromadb.get.return_value = {
+            'ids': ['mem_1', 'mem_2'],
+            'documents': ['Same content', 'Same content'],
+            'metadatas': [
+                {'timestamp': 1000, 'access_count': 100},  # Higher access
+                {'timestamp': 2000, 'access_count': 5}
+            ]
+        }
+        mock_chromadb.query.return_value = {
+            'ids': [['mem_1', 'mem_2']],
+            'documents': [['Same content', 'Same content']],
+            'metadatas': [[
+                {'timestamp': 1000, 'access_count': 100},
+                {'timestamp': 2000, 'access_count': 5}
+            ]],
+            'distances': [[0.0, 0.01]]  # Very similar
+        }
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service._prune_duplicates(sample_size=10)
+            
+            deleted = mock_chromadb.delete.call_args.kwargs['ids']
+            assert 'mem_2' in deleted  # Lower access count removed
+            assert 'mem_1' not in deleted
+
+    def test_prune_duplicates_no_similar(self, mock_chromadb):
+        """_prune_duplicates skips when no similar memories (only self-matches)."""
+        from app.services.memory import MemoryService
+        
+        mock_chromadb.get.return_value = {
+            'ids': ['mem_1'],
+            'documents': ['Apples'],
+            'metadatas': [{'timestamp': 1000, 'access_count': 0}]
+        }
+        # Query only returns the same document (no other similar docs)
+        mock_chromadb.query.return_value = {
+            'ids': [['mem_1']],
+            'documents': [['Apples']],
+            'metadatas': [[{'timestamp': 1000, 'access_count': 0}]],
+            'distances': [[0.0]]  # Only self-match
+        }
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service._prune_duplicates(sample_size=10, threshold=0.92)
+            
+            mock_chromadb.delete.assert_not_called()
+
+    def test_prune_duplicates_exception_handling(self, mock_chromadb):
+        """_prune_duplicates handles exceptions gracefully."""
+        from app.services.memory import MemoryService
+        
+        mock_chromadb.get.side_effect = Exception("Get failed")
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            # Should not raise
+            service._prune_duplicates()
 

@@ -47,13 +47,15 @@ def mock_chromadb():
     mock = MagicMock()
     mock.add = MagicMock()
     mock.query = MagicMock(return_value={
+        "ids": [["id_1", "id_2"]],
         "documents": [["Relevant memory 1", "Relevant memory 2"]],
-        "metadatas": [[{"source": "audio"}, {"source": "screen"}]],
+        "metadatas": [[{"source": "audio", "access_count": 0}, {"source": "screen", "access_count": 0}]],
         "distances": [[0.1, 0.2]],
     })
     mock.count = MagicMock(return_value=100)
-    mock.get = MagicMock(return_value={"ids": []})
+    mock.get = MagicMock(return_value={"ids": [], "metadatas": []})
     mock.delete = MagicMock()
+    mock.update = MagicMock()
     return mock
 
 
