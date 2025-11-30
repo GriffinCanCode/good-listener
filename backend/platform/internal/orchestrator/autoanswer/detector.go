@@ -8,12 +8,12 @@ import (
 	"time"
 )
 
-// QuestionDetector interface for question detection
+// QuestionDetector interface for question detection.
 type QuestionDetector interface {
 	IsQuestion(ctx context.Context, text string) (bool, error)
 }
 
-// Detector handles auto-answer logic
+// Detector handles auto-answer logic.
 type Detector struct {
 	detector QuestionDetector
 	mu       sync.Mutex
@@ -22,7 +22,7 @@ type Detector struct {
 	lastTime time.Time
 }
 
-// NewDetector creates an auto-answer detector
+// NewDetector creates an auto-answer detector.
 func NewDetector(detector QuestionDetector, cooldownSec float64, enabled bool) *Detector {
 	return &Detector{
 		detector: detector,
@@ -32,7 +32,7 @@ func NewDetector(detector QuestionDetector, cooldownSec float64, enabled bool) *
 }
 
 // Check tests if text is a question that should be auto-answered
-// Returns true if auto-answer should trigger
+// Returns true if auto-answer should trigger.
 func (d *Detector) Check(ctx context.Context, text string) bool {
 	if !d.IsEnabled() {
 		return false
@@ -58,7 +58,7 @@ func (d *Detector) Check(ctx context.Context, text string) bool {
 	return true
 }
 
-// SetEnabled enables/disables auto-answering
+// SetEnabled enables/disables auto-answering.
 func (d *Detector) SetEnabled(enabled bool) {
 	d.mu.Lock()
 	d.enabled = enabled
@@ -66,7 +66,7 @@ func (d *Detector) SetEnabled(enabled bool) {
 	slog.Info("auto-answer state changed", "enabled", enabled)
 }
 
-// IsEnabled returns current enabled state
+// IsEnabled returns current enabled state.
 func (d *Detector) IsEnabled() bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()

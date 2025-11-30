@@ -7,4 +7,3 @@ import { registerWindowHandlers } from './handlers/window';
 export function registerIpcHandlers(): void {
   registerWindowHandlers();
 }
-

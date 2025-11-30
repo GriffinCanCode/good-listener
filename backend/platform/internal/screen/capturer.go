@@ -6,20 +6,20 @@ import (
 	"os"
 )
 
-// Capturer captures screenshots with change detection
+// Capturer captures screenshots with change detection.
 type Capturer interface {
 	Capture() ([]byte, bool)
 	CaptureAlways() []byte
 	Close()
 }
 
-// backend implements platform-specific raw capture
+// backend implements platform-specific raw capture.
 type backend interface {
 	captureRaw() []byte
 	cleanup()
 }
 
-// baseCapturer provides shared hash-based change detection
+// baseCapturer provides shared hash-based change detection.
 type baseCapturer struct {
 	backend
 	lastHash [16]byte

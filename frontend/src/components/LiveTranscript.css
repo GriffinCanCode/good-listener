@@ -9,6 +9,18 @@
   flex-direction: column;
   flex-shrink: 0;
   transition: width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+}
+
+.vad-wrapper {
+  position: absolute;
+  top: 50px; /* Matches header height approx */
+  left: 0;
+  right: 0;
+  z-index: 20;
+  background: linear-gradient(180deg, rgba(10, 10, 10, 0.8) 0%, rgba(10, 10, 10, 0) 100%);
+  backdrop-filter: blur(4px);
+  pointer-events: none;
 }
 
 .transcript-header {

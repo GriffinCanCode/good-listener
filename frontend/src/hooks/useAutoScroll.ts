@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
+import { useDebouncedCallback } from './useDebounce';
 
 interface UseAutoScrollOptions {
   /** Distance from bottom (px) to consider "at bottom" - default 100 */
@@ -16,7 +17,6 @@ export const useAutoScroll = (deps: unknown[], options: UseAutoScrollOptions = {
   const containerRef = useRef<HTMLDivElement>(null);
   const isAtBottomRef = useRef(true);
   const isUserScrollingRef = useRef(false);
-  const scrollTimeoutRef = useRef<number>();
 
   const checkIfAtBottom = useCallback(() => {
     const el = containerRef.current;
@@ -34,28 +34,27 @@ export const useAutoScroll = (deps: unknown[], options: UseAutoScrollOptions = {
     });
   }, [smooth]);
 
+  const handleScrollEnd = useDebouncedCallback(() => {
+    isUserScrollingRef.current = false;
+    isAtBottomRef.current = checkIfAtBottom();
+  }, 50);
+
   // Track user scroll to determine if they've scrolled away
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
     const handleScroll = () => {
-      // Debounce to let programmatic scrolls settle
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
       isUserScrollingRef.current = true;
-
-      scrollTimeoutRef.current = window.setTimeout(() => {
-        isUserScrollingRef.current = false;
-        isAtBottomRef.current = checkIfAtBottom();
-      }, 50);
+      handleScrollEnd();
     };
 
     el.addEventListener('scroll', handleScroll, { passive: true });
     return () => {
       el.removeEventListener('scroll', handleScroll);
-      if (scrollTimeoutRef.current) clearTimeout(scrollTimeoutRef.current);
+      handleScrollEnd.cancel();
     };
-  }, [checkIfAtBottom]);
+  }, [checkIfAtBottom, handleScrollEnd]);
 
   // Auto-scroll when deps change, but only if at bottom
   useEffect(() => {

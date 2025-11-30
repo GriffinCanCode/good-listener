@@ -37,7 +37,7 @@ func TestCapturerChangeDetection(t *testing.T) {
 	}
 }
 
-// Integration test - only runs if screencapture is available
+// Integration test - only runs if screencapture is available.
 func TestCaptureIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping integration test in short mode")

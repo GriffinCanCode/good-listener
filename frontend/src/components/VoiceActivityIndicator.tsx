@@ -1,6 +1,7 @@
 import gsap from 'gsap';
 import { Mic, Volume2 } from 'lucide-react';
 import React, { memo, useEffect, useRef, useState } from 'react';
+import { useDebouncedCallback } from '../hooks/useDebounce';
 import { breathe, duration, ease } from '../lib/animations';
 import { useChatStore } from '../store/useChatStore';
 
@@ -104,7 +105,6 @@ ChannelIndicator.displayName = 'ChannelIndicator';
 export const VoiceActivityIndicator = memo(() => {
   const { vad, status } = useChatStore();
   const containerRef = useRef<HTMLDivElement>(null);
-  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isConnected = status === 'connected';
 
   const useVadDecay = (source: 'user' | 'system') => {
@@ -112,19 +112,21 @@ export const VoiceActivityIndicator = memo(() => {
     const [speech, setSpeech] = useState(false);
     const data = vad[source];
 
+    const decay = useDebouncedCallback(() => {
+      if (!data || Date.now() - data.timestamp > DECAY_MS) {
+        setProb((p) => p * 0.85);
+        if (!data?.isSpeech) setSpeech(false);
+      }
+    }, DECAY_MS);
+
     useEffect(() => {
       if (data) {
         setProb(data.probability);
         setSpeech(data.isSpeech);
       }
-      const timer = setTimeout(() => {
-        if (!data || Date.now() - data.timestamp > DECAY_MS) {
-          setProb((p) => p * 0.85);
-          if (!data?.isSpeech) setSpeech(false);
-        }
-      }, DECAY_MS);
-      return () => clearTimeout(timer);
-    }, [data]);
+      decay();
+      return () => decay.cancel();
+    }, [data, decay]);
 
     return { prob, speech };
   };
@@ -134,49 +136,41 @@ export const VoiceActivityIndicator = memo(() => {
 
   useEffect(() => {
     if (containerRef.current && !isConnected) {
-      gsap.set(containerRef.current, { height: 0, opacity: 0, marginTop: 0 });
+      gsap.set(containerRef.current, { opacity: 0, y: -10 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const hideContainer = useDebouncedCallback(() => {
+    if (containerRef.current) {
+      gsap.to(containerRef.current, {
+        opacity: 0,
+        y: -10,
+        duration: duration.fast,
+        ease: ease.butter,
+      });
+    }
+  }, 1000);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     if (isConnected) {
-      if (closeTimerRef.current) {
-        clearTimeout(closeTimerRef.current);
-        closeTimerRef.current = null;
-      }
-
+      hideContainer.cancel();
       gsap.to(containerRef.current, {
-        height: 'auto',
-        marginTop: 16,
         opacity: 1,
+        y: 0,
         duration: duration.normal,
         ease: ease.butter,
       });
     } else {
-      closeTimerRef.current = setTimeout(() => {
-        if (containerRef.current) {
-          gsap.to(containerRef.current, {
-            height: 0,
-            marginTop: 0,
-            opacity: 0,
-            duration: duration.fast,
-            ease: ease.butter,
-          });
-        }
-      }, 1000);
+      hideContainer();
     }
-
-    return () => {
-      if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
-    };
-  }, [isConnected]);
+  }, [isConnected, hideContainer]);
 
   return (
-    <div ref={containerRef} style={{ overflow: 'hidden' }} className="vad-wrapper">
-      <div className="vad-indicator" style={{ margin: 0 }}>
+    <div ref={containerRef} className="vad-wrapper">
+      <div className="vad-indicator">
         <ChannelIndicator
           source="user"
           probability={user.prob}

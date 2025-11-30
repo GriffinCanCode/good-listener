@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"sync"
-	"time"
 
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
@@ -75,51 +74,20 @@ type VADMessage struct {
 	Source      string  `json:"source"`
 }
 
-// rateLimiter tracks message timestamps using a sliding window.
-type rateLimiter struct {
-	timestamps []time.Time
-	mu         sync.Mutex
-}
-
-// allow checks if a message is allowed and records the timestamp if so.
-func (r *rateLimiter) allow() bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	now := time.Now()
-	cutoff := now.Add(-RateLimitWindow)
-
-	// Prune old timestamps
-	valid := r.timestamps[:0]
-	for _, t := range r.timestamps {
-		if t.After(cutoff) {
-			valid = append(valid, t)
-		}
-	}
-	r.timestamps = valid
-
-	if len(r.timestamps) >= RateLimitMessages {
-		return false
-	}
-
-	r.timestamps = append(r.timestamps, now)
-	return true
-}
-
 // Server handles HTTP and WebSocket connections.
 type Server struct {
-	orch       *orchestrator.Orchestrator
-	mu         sync.RWMutex
-	conns      map[*websocket.Conn]struct{}
-	rateLimits map[*websocket.Conn]*rateLimiter
+	orch        *orchestrator.Orchestrator
+	mu          sync.RWMutex
+	conns       map[*websocket.Conn]struct{}
+	ipRateLimit *ipRateLimiter // Global IP-based rate limiting
 }
 
 // New creates a new server.
 func New(orch *orchestrator.Orchestrator, _ *config.Config) *Server {
 	s := &Server{
-		orch:       orch,
-		conns:      make(map[*websocket.Conn]struct{}),
-		rateLimits: make(map[*websocket.Conn]*rateLimiter),
+		orch:        orch,
+		conns:       make(map[*websocket.Conn]struct{}),
+		ipRateLimit: newIPRateLimiter(IPRateLimitWindow, IPRateLimitMessages),
 	}
 
 	// Start broadcasters
@@ -162,6 +130,8 @@ func corsMiddleware(next http.Handler) http.Handler {
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	clientIP := extractIP(r)
+
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		OriginPatterns: []string{"*"},
 	})
@@ -173,20 +143,18 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	s.mu.Lock()
 	s.conns[conn] = struct{}{}
-	s.rateLimits[conn] = &rateLimiter{}
 	s.mu.Unlock()
 
 	defer func() {
 		s.mu.Lock()
 		delete(s.conns, conn)
-		delete(s.rateLimits, conn)
 		s.mu.Unlock()
 	}()
 
 	// Get trace context from HTTP upgrade request
 	baseCtx := r.Context()
 	log := trace.Logger(baseCtx)
-	log.Info("websocket connected", "remote", r.RemoteAddr)
+	log.Info("websocket connected", "remote", r.RemoteAddr, "client_ip", clientIP)
 
 	for {
 		var msg json.RawMessage
@@ -195,13 +163,9 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// Check rate limit
-		s.mu.RLock()
-		rl := s.rateLimits[conn]
-		s.mu.RUnlock()
-
-		if !rl.allow() {
-			log.Warn("rate limit exceeded", "remote", r.RemoteAddr)
+		// Global IP-based rate limiting (prevents multi-connection bypass)
+		if !s.ipRateLimit.allow(clientIP) {
+			log.Warn("rate limit exceeded", "client_ip", clientIP)
 			_ = wsjson.Write(baseCtx, conn, RateLimitedMessage{
 				Type:    "error",
 				Message: "rate limit exceeded",
