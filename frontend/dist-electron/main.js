@@ -78,6 +78,11 @@ function createWindow() {
             mainWindow === null || mainWindow === void 0 ? void 0 : mainWindow.maximize();
     });
     electron_1.ipcMain.on('window-close', () => mainWindow === null || mainWindow === void 0 ? void 0 : mainWindow.close());
+    electron_1.ipcMain.on('window-resize', (event, width, height) => {
+        if (mainWindow) {
+            mainWindow.setSize(width, height, true);
+        }
+    });
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
