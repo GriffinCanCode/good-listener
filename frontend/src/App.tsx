@@ -33,12 +33,10 @@ const App: React.FC = () => {
   const currentSession = getCurrentSession();
   const messages = currentSession?.messages || [];
 
-  // Ensure a session exists on mount
+  // Always start with a fresh conversation
   useEffect(() => {
-    if (sessions.length === 0) {
-      createSession();
-    }
-  }, [sessions.length, createSession]);
+    createSession();
+  }, []);
 
   // Scroll to bottom on messages/stream change
   useEffect(() => {
@@ -102,14 +100,14 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        <div className="chat-container">
             <div className="chat-area">
             {messages.length === 0 && !stream ? (
                 <div className="empty-state">
                 <motion.div 
-                    initial={{ scale: 0.9, opacity: 0 }} 
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ duration: 0.5 }}
+                    initial={{ opacity: 0 }} 
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2 }}
                     className="welcome-hero"
                 >
                     <Sparkles size={48} className="hero-icon" />
