@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/good-listener/platform/internal/grpcclient"
-	"github.com/good-listener/platform/internal/trace"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/grpcclient"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/trace"
 )
 
 // Batcher accumulates memory items and flushes them in batches.

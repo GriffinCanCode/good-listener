@@ -7,11 +7,12 @@
 package pb
 
 import (
-	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
-	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
+
+	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
+	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 )
 
 const (
@@ -1689,7 +1690,7 @@ const file_cognition_proto_rawDesc = "" +
 	"VADService\x12=\n" +
 	"\fDetectSpeech\x12\x15.cognition.VADRequest\x1a\x16.cognition.VADResponse\x12I\n" +
 	"\n" +
-	"ResetState\x12\x1c.cognition.ResetStateRequest\x1a\x1d.cognition.ResetStateResponseB*Z(github.com/good-listener/platform/pkg/pbb\x06proto3"
+	"ResetState\x12\x1c.cognition.ResetStateRequest\x1a\x1d.cognition.ResetStateResponseB*Z(github.com/GriffinCanCode/good-listener/backend/platform/pkg/pbb\x06proto3"
 
 var (
 	file_cognition_proto_rawDescOnce sync.Once

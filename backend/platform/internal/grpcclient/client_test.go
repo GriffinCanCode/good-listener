@@ -1,11 +1,12 @@
 package grpcclient
 
 import (
+	"errors"
 	"testing"
 	"time"
 
-	"github.com/good-listener/platform/internal/resilience"
-	pb "github.com/good-listener/platform/pkg/pb"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/resilience"
+	pb "github.com/GriffinCanCode/good-listener/backend/platform/pkg/pb"
 )
 
 func TestCircuitBreakerInitialState(t *testing.T) {
@@ -39,7 +40,7 @@ func TestCircuitBreakerRejectsWhenOpen(t *testing.T) {
 	})
 	cb.Failure()
 
-	if err := cb.Allow(); err != resilience.ErrOpen {
+	if err := cb.Allow(); !errors.Is(err, resilience.ErrOpen) {
 		t.Errorf("Allow() = %v, want ErrOpen", err)
 	}
 }
@@ -126,7 +127,7 @@ func TestBackwardsCompatibility(t *testing.T) {
 	}
 
 	// Test error alias
-	if ErrCircuitOpen != resilience.ErrOpen {
+	if !errors.Is(ErrCircuitOpen, resilience.ErrOpen) {
 		t.Error("ErrCircuitOpen != resilience.ErrOpen")
 	}
 }

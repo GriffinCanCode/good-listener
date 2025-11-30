@@ -4,12 +4,14 @@ package audio
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"log/slog"
 	"math"
 	"sync"
 	"time"
 
-	audiocap "github.com/good-listener/platform/internal/audio"
+	audiocap "github.com/GriffinCanCode/good-listener/backend/platform/internal/audio"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/resilience"
 )
 
 // VADClient interface for speech detection.
@@ -84,7 +86,9 @@ func (p *Processor) ProcessChunk(ctx context.Context, chunk audiocap.Chunk) {
 		audioBytes := Float32ToBytes(vadChunk)
 		prob, isSpeech, err := p.vad.DetectSpeech(ctx, audioBytes, int32(p.cfg.SampleRate))
 		if err != nil {
-			slog.Debug("VAD error", "error", err)
+			if !errors.Is(err, resilience.ErrOpen) {
+				slog.Debug("VAD error", "error", err)
+			}
 			continue
 		}
 

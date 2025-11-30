@@ -1,13 +1,13 @@
-module github.com/good-listener/backend/tests
+module github.com/GriffinCanCode/good-listener/backend/tests
 
 go 1.22
 
 require (
-	github.com/good-listener/platform v0.0.0
+	github.com/GriffinCanCode/good-listener/backend/platform v0.0.0
 	google.golang.org/grpc v1.62.0
 )
 
-replace github.com/good-listener/platform => ../platform
+replace github.com/GriffinCanCode/good-listener/backend/platform => ../platform
 
 require (
 	github.com/golang/protobuf v1.5.3 // indirect

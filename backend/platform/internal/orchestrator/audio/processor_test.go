@@ -6,7 +6,7 @@ import (
 	"math"
 	"testing"
 
-	audiocap "github.com/good-listener/platform/internal/audio"
+	audiocap "github.com/GriffinCanCode/good-listener/backend/platform/internal/audio"
 )
 
 type mockVAD struct {

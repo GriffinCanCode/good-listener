@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
+	screencap "github.com/GriffinCanCode/good-listener/backend/platform/internal/screen"
 	"github.com/corona10/goimagehash"
-	screencap "github.com/good-listener/platform/internal/screen"
 )
 
 // OCRClient interface for text extraction.

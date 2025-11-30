@@ -16,9 +16,9 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 
-	"github.com/good-listener/platform/internal/resilience"
-	"github.com/good-listener/platform/internal/trace"
-	pb "github.com/good-listener/platform/pkg/pb"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/resilience"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/trace"
+	pb "github.com/GriffinCanCode/good-listener/backend/platform/pkg/pb"
 )
 
 // Re-export for backwards compatibility.

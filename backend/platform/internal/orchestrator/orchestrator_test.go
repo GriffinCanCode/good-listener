@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/good-listener/platform/internal/orchestrator/audio"
-	"github.com/good-listener/platform/internal/orchestrator/transcript"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/audio"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/transcript"
 )
 
 func TestFloat32ToBytes(t *testing.T) {

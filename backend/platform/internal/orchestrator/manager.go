@@ -7,17 +7,17 @@ import (
 	"sync"
 	"time"
 
-	audiocap "github.com/good-listener/platform/internal/audio"
-	"github.com/good-listener/platform/internal/config"
-	"github.com/good-listener/platform/internal/grpcclient"
-	"github.com/good-listener/platform/internal/orchestrator/audio"
-	"github.com/good-listener/platform/internal/orchestrator/autoanswer"
-	"github.com/good-listener/platform/internal/orchestrator/memory"
-	"github.com/good-listener/platform/internal/orchestrator/screen"
-	"github.com/good-listener/platform/internal/orchestrator/transcript"
-	screencap "github.com/good-listener/platform/internal/screen"
-	"github.com/good-listener/platform/internal/trace"
-	pb "github.com/good-listener/platform/pkg/pb"
+	audiocap "github.com/GriffinCanCode/good-listener/backend/platform/internal/audio"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/config"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/grpcclient"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/audio"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/autoanswer"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/memory"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/screen"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/transcript"
+	screencap "github.com/GriffinCanCode/good-listener/backend/platform/internal/screen"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/trace"
+	pb "github.com/GriffinCanCode/good-listener/backend/platform/pkg/pb"
 )
 
 // TranscriptEvent re-exported for API compatibility.

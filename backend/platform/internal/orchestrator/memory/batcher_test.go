@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/good-listener/platform/internal/grpcclient"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/grpcclient"
 )
 
 type mockClient struct {

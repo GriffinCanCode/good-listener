@@ -11,9 +11,9 @@ import (
 	"github.com/coder/websocket"
 	"github.com/coder/websocket/wsjson"
 
-	"github.com/good-listener/platform/internal/config"
-	"github.com/good-listener/platform/internal/orchestrator"
-	"github.com/good-listener/platform/internal/trace"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/config"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/trace"
 )
 
 // Message types.

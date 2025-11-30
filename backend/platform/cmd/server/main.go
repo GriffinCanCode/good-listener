@@ -10,10 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/good-listener/platform/internal/config"
-	"github.com/good-listener/platform/internal/grpcclient"
-	"github.com/good-listener/platform/internal/orchestrator"
-	"github.com/good-listener/platform/internal/server"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/config"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/grpcclient"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/server"
 )
 
 func main() {

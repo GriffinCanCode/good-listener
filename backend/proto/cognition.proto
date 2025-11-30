@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package cognition;
 
-option go_package = "github.com/good-listener/platform/pkg/pb";
+option go_package = "github.com/GriffinCanCode/good-listener/backend/platform/pkg/pb";
 
 // ============================================================================
 // Transcription Service - Whisper STT
