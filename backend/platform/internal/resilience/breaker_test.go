@@ -7,6 +7,17 @@ import (
 	"time"
 )
 
+// testConfig returns a fast config for testing (short windows).
+func testConfig(threshold int) Config {
+	return Config{
+		Threshold:         threshold,
+		ResetTimeout:      time.Millisecond,
+		MaxBackoff:        10 * time.Millisecond,
+		FailureWindow:     time.Hour, // long window so failures don't expire in tests
+		HalfOpenSuccesses: 1,
+	}
+}
+
 func TestBreakerInitialState(t *testing.T) {
 	b := New(DefaultConfig())
 	if b.State() != Closed {
@@ -15,7 +26,7 @@ func TestBreakerInitialState(t *testing.T) {
 }
 
 func TestBreakerOpensAfterThreshold(t *testing.T) {
-	b := New(Config{Threshold: 3, ResetTimeout: time.Hour, HalfOpenSuccesses: 2})
+	b := New(testConfig(3))
 
 	for i := 0; i < 3; i++ {
 		b.Failure()
@@ -27,16 +38,18 @@ func TestBreakerOpensAfterThreshold(t *testing.T) {
 }
 
 func TestBreakerRejectsWhenOpen(t *testing.T) {
-	b := New(Config{Threshold: 1, ResetTimeout: time.Hour, HalfOpenSuccesses: 1})
+	cfg := testConfig(1)
+	cfg.ResetTimeout = time.Hour // prevent auto-recovery
+	b := New(cfg)
 	b.Failure()
 
-	if err := b.Allow(); err != ErrOpen {
+	if err := b.Allow(); !errors.Is(err, ErrOpen) {
 		t.Errorf("Allow() = %v, want ErrOpen", err)
 	}
 }
 
 func TestBreakerTransitionsToHalfOpen(t *testing.T) {
-	b := New(Config{Threshold: 1, ResetTimeout: time.Millisecond, HalfOpenSuccesses: 1})
+	b := New(testConfig(1))
 	b.Failure()
 
 	time.Sleep(5 * time.Millisecond)
@@ -50,7 +63,9 @@ func TestBreakerTransitionsToHalfOpen(t *testing.T) {
 }
 
 func TestBreakerClosesAfterSuccesses(t *testing.T) {
-	b := New(Config{Threshold: 1, ResetTimeout: time.Millisecond, HalfOpenSuccesses: 2})
+	cfg := testConfig(1)
+	cfg.HalfOpenSuccesses = 2
+	b := New(cfg)
 	b.Failure()
 
 	time.Sleep(5 * time.Millisecond)
@@ -65,7 +80,9 @@ func TestBreakerClosesAfterSuccesses(t *testing.T) {
 }
 
 func TestBreakerReopensOnHalfOpenFailure(t *testing.T) {
-	b := New(Config{Threshold: 1, ResetTimeout: time.Millisecond, HalfOpenSuccesses: 3})
+	cfg := testConfig(1)
+	cfg.HalfOpenSuccesses = 3
+	b := New(cfg)
 	b.Failure()
 
 	time.Sleep(5 * time.Millisecond)
@@ -79,7 +96,9 @@ func TestBreakerReopensOnHalfOpenFailure(t *testing.T) {
 }
 
 func TestBreakerReset(t *testing.T) {
-	b := New(Config{Threshold: 1, ResetTimeout: time.Hour, HalfOpenSuccesses: 1})
+	cfg := testConfig(1)
+	cfg.ResetTimeout = time.Hour
+	b := New(cfg)
 	b.Failure()
 
 	if b.State() != Open {
@@ -94,7 +113,7 @@ func TestBreakerReset(t *testing.T) {
 }
 
 func TestBreakerExecute(t *testing.T) {
-	b := New(Config{Threshold: 2, ResetTimeout: time.Second, HalfOpenSuccesses: 1})
+	b := New(testConfig(5))
 
 	// Success case
 	err := b.Execute(func() error { return nil })
@@ -105,7 +124,7 @@ func TestBreakerExecute(t *testing.T) {
 	// Failure case
 	testErr := errors.New("test error")
 	err = b.Execute(func() error { return testErr })
-	if err != testErr {
+	if !errors.Is(err, testErr) {
 		t.Errorf("Execute failure = %v, want %v", err, testErr)
 	}
 }
@@ -123,7 +142,7 @@ func TestBreakerExecuteWithResult(t *testing.T) {
 
 func TestBreakerHook(t *testing.T) {
 	var transitions []struct{ from, to State }
-	b := New(Config{Threshold: 1, ResetTimeout: time.Millisecond, HalfOpenSuccesses: 1})
+	b := New(testConfig(1))
 	b.WithHook(func(from, to State) {
 		transitions = append(transitions, struct{ from, to State }{from, to})
 	})
@@ -139,20 +158,20 @@ func TestBreakerHook(t *testing.T) {
 }
 
 func TestBreakerConcurrentSafety(t *testing.T) {
-	b := New(Config{Threshold: 100, ResetTimeout: time.Second, HalfOpenSuccesses: 10})
+	b := New(testConfig(100))
 
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
 		wg.Add(1)
-		go func() {
+		go func(n int) {
 			defer wg.Done()
 			_ = b.Allow()
-			if i%2 == 0 {
+			if n%2 == 0 {
 				b.Success()
 			} else {
 				b.Failure()
 			}
-		}()
+		}(i)
 	}
 	wg.Wait()
 
@@ -180,28 +199,67 @@ func TestStateString(t *testing.T) {
 func TestConfigDefaults(t *testing.T) {
 	cfg := Config{}.withDefaults()
 
-	if cfg.Threshold != 5 {
-		t.Errorf("Threshold = %d, want 5", cfg.Threshold)
+	if cfg.Threshold != DefaultThreshold {
+		t.Errorf("Threshold = %d, want %d", cfg.Threshold, DefaultThreshold)
 	}
-	if cfg.ResetTimeout != 30*time.Second {
-		t.Errorf("ResetTimeout = %v, want 30s", cfg.ResetTimeout)
+	if cfg.ResetTimeout != DefaultResetTimeout {
+		t.Errorf("ResetTimeout = %v, want %v", cfg.ResetTimeout, DefaultResetTimeout)
 	}
-	if cfg.HalfOpenSuccesses != 3 {
-		t.Errorf("HalfOpenSuccesses = %d, want 3", cfg.HalfOpenSuccesses)
+	if cfg.HalfOpenSuccesses != DefaultHalfOpenSuccesses {
+		t.Errorf("HalfOpenSuccesses = %d, want %d", cfg.HalfOpenSuccesses, DefaultHalfOpenSuccesses)
+	}
+	if cfg.FailureWindow != DefaultFailureWindow {
+		t.Errorf("FailureWindow = %v, want %v", cfg.FailureWindow, DefaultFailureWindow)
+	}
+	if cfg.MaxBackoff != DefaultMaxBackoff {
+		t.Errorf("MaxBackoff = %v, want %v", cfg.MaxBackoff, DefaultMaxBackoff)
 	}
 }
 
-func TestSuccessResetsFailures(t *testing.T) {
-	b := New(Config{Threshold: 3, ResetTimeout: time.Hour, HalfOpenSuccesses: 1})
+func TestSlidingWindowExpiry(t *testing.T) {
+	cfg := Config{
+		Threshold:         3,
+		ResetTimeout:      time.Hour,
+		MaxBackoff:        time.Hour,
+		FailureWindow:     50 * time.Millisecond, // short window
+		HalfOpenSuccesses: 1,
+	}
+	b := New(cfg)
 
 	b.Failure()
 	b.Failure()
-	b.Success() // Should reset failure count
-	b.Failure()
-	b.Failure()
+	time.Sleep(60 * time.Millisecond) // let failures expire
+	b.Failure()                       // only 1 failure in window now
 
-	// Should still be closed since successes reset the count
 	if b.State() != Closed {
-		t.Errorf("state = %v, want Closed", b.State())
+		t.Errorf("state = %v, want Closed (old failures should have expired)", b.State())
+	}
+}
+
+func TestExponentialBackoff(t *testing.T) {
+	cfg := Config{
+		Threshold:         1,
+		ResetTimeout:      10 * time.Millisecond,
+		MaxBackoff:        100 * time.Millisecond,
+		FailureWindow:     time.Hour,
+		HalfOpenSuccesses: 1,
+	}
+	b := New(cfg)
+
+	// First open: should use base timeout
+	b.Failure()
+	if b.State() != Open {
+		t.Fatal("expected open")
+	}
+
+	// Wait for base timeout, transition to half-open, then fail again
+	time.Sleep(15 * time.Millisecond)
+	_ = b.Allow()
+	b.Failure() // second open
+
+	// Second open should have longer backoff (~20ms)
+	backoff := b.currentBackoff()
+	if backoff < 15*time.Millisecond {
+		t.Errorf("second backoff = %v, expected > 15ms", backoff)
 	}
 }
