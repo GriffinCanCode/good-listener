@@ -38,7 +38,7 @@ inference-venv:
 inference-install: inference-venv
 
 inference:
-	@cd inference && ./venv/bin/python -m app.grpc_server
+	@cd inference && ./venv/bin/python -W "ignore::UserWarning:pyannote.audio.core.io" -m app.grpc_server
 
 inference-test:
 	@cd inference && ./venv/bin/pytest tests/ -v
