@@ -1,4 +1,4 @@
-.PHONY: install-backend install-frontend start-backend start-frontend start-all clean check-env
+.PHONY: install-backend install-frontend start-backend start-frontend start-all clean check-env test
 
 # Environment Variables
 PYTHON := python3
@@ -47,4 +47,8 @@ check-env:
 	@command -v $(PYTHON) >/dev/null 2>&1 || { echo >&2 "Python is not installed."; exit 1; }
 	@command -v $(NPM) >/dev/null 2>&1 || { echo >&2 "NPM is not installed."; exit 1; }
 	@echo "Environment looks good."
+
+test:
+	@echo "Running backend tests..."
+	cd backend && . venv/bin/activate && $(PYTHON) -m pytest tests/ -v
 

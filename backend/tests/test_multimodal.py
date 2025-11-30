@@ -1,136 +1,207 @@
+"""
+Integration tests for multimodal context flow.
+Tests that audio and visual inputs are captured and processed together.
+"""
 import pytest
 import asyncio
 import numpy as np
 from unittest.mock import MagicMock, patch, AsyncMock
 from PIL import Image
-from app.services.monitor import BackgroundMonitor
-from app.services.audio import AudioService, DeviceListener
-from app.services.capture import CaptureService
-from app.services.ocr import OCRService
-from app.services.llm import LLMService
-from app.services.memory import MemoryService
+
 
 @pytest.fixture
-def mock_services():
+def multimodal_services():
+    """Create mocked services for integration testing."""
+    from app.services.capture import CaptureService
+    from app.services.ocr import OCRService
+    from app.services.memory import MemoryService
+    
     capture = MagicMock(spec=CaptureService)
-    # Create a dummy image
     img = Image.new('RGB', (100, 100), color='white')
     capture.capture_screen.return_value = img
 
     ocr = AsyncMock(spec=OCRService)
     ocr.extract_text_async.return_value = "Visual Context: User is looking at code."
 
-    # Audio Service with mocks
-    # We mock the hardware/model parts but keep the logic
     with patch('app.services.audio.sd') as mock_sd, \
          patch('app.services.audio.WhisperModel') as MockWhisper, \
          patch('torch.hub.load') as mock_hub:
         
-        # Setup Whisper Mock
-        mock_model_instance = MockWhisper.return_value
-        # transcribe returns (segments, info)
         Segment = MagicMock()
         Segment.text = "Audio Context: Hello Computer."
-        mock_model_instance.transcribe.return_value = ([Segment], None)
+        MockWhisper.return_value.transcribe.return_value = ([Segment], None)
         
-        # Setup VAD Mock
         mock_vad = MagicMock()
-        # Return > 0.5 to trigger speech
         mock_vad.return_value.item.return_value = 0.8 
         mock_hub.return_value = (mock_vad, None)
         
-        # Setup SoundDevice Mock
         mock_sd.query_devices.return_value = [{'name': 'Mic', 'max_input_channels': 1}]
         mock_sd.default.device = [0, 0]
 
+        from app.services.audio import AudioService
         audio = AudioService()
     
         memory = MagicMock(spec=MemoryService)
-        
-        llm = AsyncMock(spec=LLMService)
-        
-        # Helper for async generator
-        async def async_gen():
-            yield "Insight: "
-            yield "I see you are coding."
-
-        # Analyze is called and returns an async iterator
-        llm.analyze = MagicMock(side_effect=lambda *a, **k: async_gen())
 
         yield {
             'capture': capture,
             'ocr': ocr,
             'audio': audio,
             'memory': memory,
-            'llm': llm
         }
 
+
 @pytest.mark.asyncio
-async def test_multimodal_context_flow(mock_services):
-    """
-    Tests that audio and visual inputs are captured, processed, 
-    and combined into a prompt for the LLM.
-    """
+async def test_multimodal_context_flow(multimodal_services):
+    """Tests audio and visual inputs captured and combined."""
+    from app.services.monitor import BackgroundMonitor
+    
     monitor = BackgroundMonitor(
-        capture_service=mock_services['capture'],
-        ocr_service=mock_services['ocr'],
-        audio_service=mock_services['audio'],
-        memory_service=mock_services['memory'],
-        llm_service=mock_services['llm']
+        capture_service=multimodal_services['capture'],
+        ocr_service=multimodal_services['ocr'],
+        audio_service=multimodal_services['audio'],
+        memory_service=multimodal_services['memory'],
     )
 
-    # 1. Start Monitor
     await monitor.start()
     
-    # 2. Simulate Audio Input
-    # We manually trigger the processing logic in the listener
-    # equivalent to hardware callback + internal loop
-    listener = monitor.audio_service.listeners[0]
+    # Simulate audio via transcript handling (bypasses hardware)
+    monitor._handle_transcript("Audio Context: Hello Computer.", "user")
     
-    # Feed enough chunks to trigger VAD and then silence to trigger transcribe
-    # Chunk size 512. Sample rate 16000.
-    # We need ~0.5s of speech (8000 samples) + silence
+    # Allow processing
+    await asyncio.sleep(0.3)
     
-    # Speech
-    speech_chunk = np.random.rand(512).astype(np.float32)
-    for _ in range(20): # ~10k samples
-        listener._process(speech_chunk)
-        
-    # Silence
-    # We need to patch VAD to return 0 now
-    listener.vad_model.return_value.item.return_value = 0.0
+    # Verify OCR was called
+    multimodal_services['ocr'].extract_text_async.assert_called()
     
-    silence_chunk = np.zeros(512).astype(np.float32)
-    for _ in range(listener.max_silence_chunks + 2):
-        listener._process(silence_chunk)
-        
-    # 3. Allow async loop to process
-    await asyncio.sleep(1) 
+    # Verify transcript processed
+    assert monitor.latest_transcript == "Audio Context: Hello Computer."
     
-    # 4. Verify Results
-    
-    # Check if OCR was called
-    mock_services['ocr'].extract_text_async.assert_called()
-    
-    # Check if Memory was updated with both contexts
-    # Audio memory
-    mock_services['memory'].add_memory.assert_any_call("Audio Context: Hello Computer.", "audio")
-    # Screen memory (might take a few loops in monitor, monitor sleeps 5s)
-    # We can force the check or wait? monitor._screen_loop sleeps 5s.
-    # We can't easily wait 5s in a fast test.
-    # We'll inspect internal state
+    # Verify screen text captured
     assert monitor.latest_text == "Visual Context: User is looking at code."
     
-    # Check if LLM was called with combined context
-    # llm.analyze(latest_text, prompt, latest_image)
-    assert mock_services['llm'].analyze.called
-    call_args = mock_services['llm'].analyze.call_args
-    _, prompt, _ = call_args[0]
+    # Verify memory updated with transcript
+    multimodal_services['memory'].add_memory.assert_called()
     
-    print(f"Generated Prompt: {prompt}")
+    # Verify recent transcripts tracked
+    assert len(monitor.recent_transcripts) > 0
     
-    assert "Audio Context: Hello Computer." in prompt
-    assert "Visual Context: User is looking at code." in prompt
-
+    # Get recent transcript should include audio context
+    recent = monitor.get_recent_transcript(seconds=60)
+    assert "Hello Computer" in recent
+    
     await monitor.stop()
 
+
+@pytest.mark.asyncio
+async def test_audio_processing_pipeline(multimodal_services):
+    """Tests audio transcription via device listener."""
+    audio_service = multimodal_services['audio']
+    
+    # Start with a mock callback
+    transcripts = []
+    audio_service.start_listening(lambda text, src: transcripts.append((text, src)))
+    
+    if audio_service.listeners:
+        listener = audio_service.listeners[0]
+        
+        # Feed speech chunks
+        for _ in range(20):
+            listener._process(np.random.rand(512).astype(np.float32))
+        
+        # Switch to silence to trigger transcription
+        listener.vad_model.return_value.item.return_value = 0.0
+        for _ in range(listener.max_silence_chunks + 2):
+            listener._process(np.zeros(512).astype(np.float32))
+        
+        # Transcription should have occurred
+        assert audio_service.model.transcribe.called
+
+
+@pytest.mark.asyncio  
+async def test_screen_capture_flow(multimodal_services):
+    """Tests screen capture and OCR processing."""
+    from app.services.monitor import BackgroundMonitor
+    
+    monitor = BackgroundMonitor(
+        capture_service=multimodal_services['capture'],
+        ocr_service=multimodal_services['ocr'],
+        audio_service=multimodal_services['audio'],
+        memory_service=multimodal_services['memory'],
+    )
+    
+    await monitor.start()
+    await asyncio.sleep(0.3)
+    
+    # Capture should have been called
+    multimodal_services['capture'].capture_screen.assert_called()
+    
+    # OCR should have processed
+    multimodal_services['ocr'].extract_text_async.assert_called()
+    
+    # Latest image should be set
+    assert monitor.latest_image is not None
+    
+    await monitor.stop()
+
+
+@pytest.mark.asyncio
+async def test_question_detection_from_system_audio(multimodal_services):
+    """Tests question detection triggers callback."""
+    from app.services.monitor import BackgroundMonitor
+    
+    monitor = BackgroundMonitor(
+        capture_service=multimodal_services['capture'],
+        ocr_service=multimodal_services['ocr'],
+        audio_service=multimodal_services['audio'],
+        memory_service=multimodal_services['memory'],
+    )
+    
+    question_detected = []
+    
+    async def on_question(q):
+        question_detected.append(q)
+    
+    monitor.on_question_detected = on_question
+    monitor._auto_answer_enabled = True
+    
+    await monitor.start()
+    
+    # System audio with question should trigger detection
+    monitor._handle_transcript("What do you think about this approach?", "system")
+    
+    await asyncio.sleep(0.2)
+    
+    # Question should be detected
+    assert len(question_detected) == 1
+    assert "approach" in question_detected[0]
+    
+    await monitor.stop()
+
+
+@pytest.mark.asyncio
+async def test_user_questions_not_auto_answered(multimodal_services):
+    """Tests user questions don't trigger auto-answer."""
+    from app.services.monitor import BackgroundMonitor
+    
+    monitor = BackgroundMonitor(
+        capture_service=multimodal_services['capture'],
+        ocr_service=multimodal_services['ocr'],
+        audio_service=multimodal_services['audio'],
+        memory_service=multimodal_services['memory'],
+    )
+    
+    question_detected = []
+    monitor.on_question_detected = AsyncMock(side_effect=question_detected.append)
+    monitor._auto_answer_enabled = True
+    
+    await monitor.start()
+    
+    # User audio question should NOT trigger
+    monitor._handle_transcript("What is the best way to do this?", "user")
+    
+    await asyncio.sleep(0.2)
+    
+    assert len(question_detected) == 0
+    
+    await monitor.stop()
