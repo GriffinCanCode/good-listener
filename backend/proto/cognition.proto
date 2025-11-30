@@ -1,0 +1,166 @@
+syntax = "proto3";
+
+package cognition;
+
+option go_package = "github.com/good-listener/platform/pkg/pb";
+
+// ============================================================================
+// Transcription Service - Whisper STT
+// ============================================================================
+
+service TranscriptionService {
+    // Transcribe audio bytes to text
+    rpc Transcribe(TranscribeRequest) returns (TranscribeResponse);
+    
+    // Stream audio chunks for real-time transcription
+    rpc StreamTranscribe(stream AudioChunk) returns (stream TranscriptSegment);
+}
+
+message TranscribeRequest {
+    bytes audio_data = 1;      // PCM float32 audio at 16kHz
+    int32 sample_rate = 2;     // Sample rate (default 16000)
+    string language = 3;       // Optional language hint
+}
+
+message TranscribeResponse {
+    string text = 1;
+    double confidence = 2;
+    int64 duration_ms = 3;
+}
+
+message AudioChunk {
+    bytes data = 1;            // PCM float32 audio chunk
+    int64 timestamp_ns = 2;    // Nanosecond timestamp
+    string device_id = 3;      // Source device identifier
+}
+
+message TranscriptSegment {
+    string text = 1;
+    string device_id = 2;
+    int64 start_ns = 3;
+    int64 end_ns = 4;
+    bool is_final = 5;
+}
+
+// ============================================================================
+// OCR Service - Text extraction from images
+// ============================================================================
+
+service OCRService {
+    rpc ExtractText(OCRRequest) returns (OCRResponse);
+}
+
+message OCRRequest {
+    bytes image_data = 1;      // JPEG or PNG encoded image
+    string format = 2;         // "jpeg" or "png"
+}
+
+message OCRResponse {
+    string text = 1;
+    repeated BoundingBox boxes = 2;
+}
+
+message BoundingBox {
+    int32 x1 = 1;
+    int32 y1 = 2;
+    int32 x2 = 3;
+    int32 y2 = 4;
+    string text = 5;
+    float confidence = 6;
+}
+
+// ============================================================================
+// LLM Service - Language model inference
+// ============================================================================
+
+service LLMService {
+    // Streaming analysis response
+    rpc Analyze(AnalyzeRequest) returns (stream AnalyzeChunk);
+    
+    // Check if text is a question
+    rpc IsQuestion(IsQuestionRequest) returns (IsQuestionResponse);
+}
+
+message AnalyzeRequest {
+    string context_text = 1;   // OCR/screen text
+    string user_query = 2;     // User's question
+    bytes image_data = 3;      // Optional screenshot (JPEG)
+    string transcript = 4;     // Recent conversation transcript
+}
+
+message AnalyzeChunk {
+    string content = 1;
+    bool is_final = 2;
+}
+
+message IsQuestionRequest {
+    string text = 1;
+}
+
+message IsQuestionResponse {
+    bool is_question = 1;
+}
+
+// ============================================================================
+// Memory Service - Vector storage and retrieval
+// ============================================================================
+
+service MemoryService {
+    rpc Store(StoreRequest) returns (StoreResponse);
+    rpc Query(QueryRequest) returns (QueryResponse);
+    rpc Clear(ClearRequest) returns (ClearResponse);
+}
+
+message StoreRequest {
+    string text = 1;
+    string source = 2;         // "audio" or "screen"
+    map<string, string> metadata = 3;
+}
+
+message StoreResponse {
+    string id = 1;
+    bool success = 2;
+}
+
+message QueryRequest {
+    string query_text = 1;
+    int32 n_results = 2;
+    string source_filter = 3;  // Optional: filter by source
+}
+
+message QueryResponse {
+    repeated string documents = 1;
+    repeated float scores = 2;
+}
+
+message ClearRequest {}
+
+message ClearResponse {
+    int32 deleted_count = 1;
+}
+
+// ============================================================================
+// VAD Service - Voice Activity Detection
+// ============================================================================
+
+service VADService {
+    rpc DetectSpeech(VADRequest) returns (VADResponse);
+    rpc ResetState(ResetStateRequest) returns (ResetStateResponse);
+}
+
+message VADRequest {
+    bytes audio_chunk = 1;     // 512 samples of float32 PCM
+    int32 sample_rate = 2;
+}
+
+message VADResponse {
+    float speech_probability = 1;
+    bool is_speech = 2;
+}
+
+message ResetStateRequest {}
+
+message ResetStateResponse {
+    bool success = 1;
+}
+

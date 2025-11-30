@@ -233,3 +233,172 @@ class TestLLMService:
         assert "- Memory 1" in result
         assert "- Memory 2" in result
 
+
+class TestLLMServiceOllama:
+    """Tests specific to Ollama provider."""
+
+    def test_init_ollama_custom_host(self):
+        """LLMService uses custom Ollama host."""
+        from app.services.llm import LLMService
+        
+        with patch.dict(os.environ, {'OLLAMA_HOST': 'http://custom:11434'}):
+            with patch('app.services.llm.ChatOllama') as MockOllama:
+                service = LLMService(provider="ollama", model_name="llama2")
+                
+                MockOllama.assert_called_once()
+                call_kwargs = MockOllama.call_args.kwargs
+                assert call_kwargs['base_url'] == 'http://custom:11434'
+
+    def test_init_ollama_default_host(self):
+        """LLMService uses default Ollama host when not specified."""
+        from app.services.llm import LLMService
+        
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop('OLLAMA_HOST', None)
+            with patch('app.services.llm.ChatOllama') as MockOllama:
+                service = LLMService(provider="ollama", model_name="llama2")
+                
+                call_kwargs = MockOllama.call_args.kwargs
+                assert call_kwargs['base_url'] == 'http://localhost:11434'
+
+
+class TestLLMServiceImageProcessing:
+    """Tests for image processing in LLM."""
+
+    def test_process_image_jpeg_output(self):
+        """_process_image outputs JPEG-encoded base64."""
+        from app.services.llm import LLMService
+        import base64
+        
+        service = LLMService(provider="unknown")
+        image = Image.new('RGB', (50, 50), color='blue')
+        
+        result = service._process_image(image)
+        decoded = base64.b64decode(result)
+        
+        # JPEG magic bytes
+        assert decoded[:2] == b'\xff\xd8'
+
+    def test_process_image_large_image(self):
+        """_process_image handles large images."""
+        from app.services.llm import LLMService
+        
+        service = LLMService(provider="unknown")
+        large_image = Image.new('RGB', (4000, 3000), color='green')
+        
+        result = service._process_image(large_image)
+        
+        assert len(result) > 0
+
+    def test_attach_image_preserves_text(self):
+        """_attach_image_if_present preserves original text content."""
+        from app.services.llm import LLMService
+        from langchain_core.messages import HumanMessage
+        
+        service = LLMService(provider="unknown")
+        messages = [HumanMessage(content="Original text query")]
+        image = Image.new('RGB', (10, 10))
+        
+        result = service._attach_image_if_present(messages, image)
+        
+        assert result[-1].content[0]['text'] == "Original text query"
+        assert result[-1].content[1]['type'] == 'image_url'
+
+
+class TestLLMServiceContextHandling:
+    """Tests for context handling."""
+
+    @pytest.mark.asyncio
+    async def test_analyze_empty_context(self):
+        """analyze handles empty context text."""
+        from app.services.llm import LLMService
+        
+        async def mock_stream(*args):
+            chunk = MagicMock()
+            chunk.content = "Response"
+            yield chunk
+        
+        with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
+            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+                mock_llm = MagicMock()
+                mock_llm.astream = mock_stream
+                MockGemini.return_value = mock_llm
+                
+                service = LLMService(provider="gemini")
+                chunks = [c async for c in service.analyze("", "query")]
+                
+                assert chunks == ["Response"]
+
+    @pytest.mark.asyncio
+    async def test_analyze_uses_default_query(self):
+        """analyze uses default query when empty."""
+        from app.services.llm import LLMService
+        
+        captured = []
+        
+        async def mock_stream(messages):
+            captured.extend(messages)
+            chunk = MagicMock()
+            chunk.content = "Done"
+            yield chunk
+        
+        with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
+            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+                mock_llm = MagicMock()
+                mock_llm.astream = mock_stream
+                MockGemini.return_value = mock_llm
+                
+                service = LLMService(provider="gemini")
+                await service.analyze("context", "")  # Empty query
+                
+                # Template should use "Analyze this screen." as default
+
+    @pytest.mark.asyncio
+    async def test_analyze_with_none_image(self):
+        """analyze works with None image."""
+        from app.services.llm import LLMService
+        
+        async def mock_stream(*args):
+            chunk = MagicMock()
+            chunk.content = "Response"
+            yield chunk
+        
+        with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
+            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+                mock_llm = MagicMock()
+                mock_llm.astream = mock_stream
+                MockGemini.return_value = mock_llm
+                
+                service = LLMService(provider="gemini")
+                chunks = [c async for c in service.analyze("context", "query", None)]
+                
+                assert chunks == ["Response"]
+
+
+class TestLLMServiceProviders:
+    """Tests for provider selection."""
+
+    def test_gemini_api_key_from_gemini_env(self):
+        """LLMService uses GEMINI_API_KEY when GOOGLE_API_KEY is missing."""
+        from app.services.llm import LLMService
+        
+        with patch.dict(os.environ, {'GEMINI_API_KEY': 'gemini-key'}, clear=True):
+            os.environ.pop('GOOGLE_API_KEY', None)
+            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+                service = LLMService(provider="gemini")
+                
+                assert service.api_key == 'gemini-key'
+
+    def test_gemini_prefers_google_api_key(self):
+        """LLMService prefers GOOGLE_API_KEY over GEMINI_API_KEY."""
+        from app.services.llm import LLMService
+        
+        with patch.dict(os.environ, {
+            'GOOGLE_API_KEY': 'google-key',
+            'GEMINI_API_KEY': 'gemini-key'
+        }):
+            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+                service = LLMService(provider="gemini")
+                
+                assert service.api_key == 'google-key'
+

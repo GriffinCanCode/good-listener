@@ -193,3 +193,149 @@ class TestMemoryService:
                     
                     mock_makedirs.assert_called_with("/tmp/new_dir", exist_ok=True)
 
+
+class TestMemoryServiceEdgeCases:
+    """Edge case tests for MemoryService."""
+
+    def test_add_memory_whitespace_only(self, mock_chromadb):
+        """add_memory skips whitespace-only text."""
+        from app.services.memory import MemoryService
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service.add_memory("\t\n  ", "audio")
+            
+            mock_chromadb.add.assert_not_called()
+
+    def test_add_memory_exception_handling(self, mock_chromadb):
+        """add_memory handles add exception gracefully."""
+        from app.services.memory import MemoryService
+        
+        mock_chromadb.add.side_effect = Exception("Add failed")
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            # Should not raise
+            service.add_memory("Test content", "audio")
+
+    def test_query_memory_with_special_characters(self, mock_chromadb):
+        """query_memory handles special characters in query."""
+        from app.services.memory import MemoryService
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service.query_memory("def func(): return {}", n_results=3)
+            
+            mock_chromadb.query.assert_called_once()
+
+    def test_query_memory_large_n_results(self, mock_chromadb):
+        """query_memory handles large n_results."""
+        from app.services.memory import MemoryService
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service.query_memory("test", n_results=1000)
+            
+            call_args = mock_chromadb.query.call_args
+            assert call_args.kwargs['n_results'] == 1000
+
+    def test_add_memory_preserves_custom_timestamp(self, mock_chromadb):
+        """add_memory preserves custom timestamp in metadata."""
+        from app.services.memory import MemoryService
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            custom_meta = {"timestamp": 1234567890}
+            service.add_memory("Test", "screen", metadata=custom_meta)
+            
+            call_args = mock_chromadb.add.call_args
+            assert call_args.kwargs['metadatas'][0]['timestamp'] == 1234567890
+
+    def test_prune_oldest_no_ids(self, mock_chromadb):
+        """_prune_oldest handles empty ID list."""
+        from app.services.memory import MemoryService
+        
+        mock_chromadb.get.return_value = {'ids': []}
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service._prune_oldest(keep=5000)
+            
+            mock_chromadb.delete.assert_not_called()
+
+    def test_prune_oldest_under_threshold(self, mock_chromadb):
+        """_prune_oldest skips when under threshold."""
+        from app.services.memory import MemoryService
+        
+        mock_chromadb.get.return_value = {'ids': [f"audio_{i}" for i in range(100)]}
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service._prune_oldest(keep=5000)
+            
+            mock_chromadb.delete.assert_not_called()
+
+    def test_prune_oldest_exception(self, mock_chromadb):
+        """_prune_oldest handles exceptions gracefully."""
+        from app.services.memory import MemoryService
+        
+        mock_chromadb.get.side_effect = Exception("Get failed")
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            # Should not raise
+            service._prune_oldest(keep=5000)
+
+
+class TestMemoryServiceConcurrency:
+    """Tests for concurrent memory operations."""
+
+    def test_add_memory_generates_unique_ids(self, mock_chromadb):
+        """add_memory generates unique IDs for concurrent calls."""
+        from app.services.memory import MemoryService
+        import time
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            
+            service.add_memory("First", "audio")
+            time.sleep(0.002)  # Ensure different timestamp
+            service.add_memory("Second", "audio")
+            
+            calls = mock_chromadb.add.call_args_list
+            id1 = calls[0].kwargs['ids'][0]
+            id2 = calls[1].kwargs['ids'][0]
+            
+            assert id1 != id2
+
+    def test_query_memory_none_filter(self, mock_chromadb):
+        """query_memory handles None filter_metadata."""
+        from app.services.memory import MemoryService
+        
+        with patch('app.services.memory.chromadb.PersistentClient') as MockClient:
+            MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
+            
+            service = MemoryService(persistence_path="/tmp/test")
+            service.query_memory("test", filter_metadata=None)
+            
+            call_args = mock_chromadb.query.call_args
+            assert call_args.kwargs['where'] is None
+
