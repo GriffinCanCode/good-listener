@@ -33,7 +33,7 @@ class VADService:
         """Detect speech in audio chunk. Args: audio_chunk (Float32 PCM, 512 samples), sample_rate. Returns: (prob, is_speech)."""
         try:
             _ = self.model  # Ensure model is loaded (also loads torch)
-            return (p := self._model(self._torch.tensor(audio_chunk, dtype=self._torch.float32), sample_rate).item()), p > self.threshold
+            return (p := self._model(self._torch.from_numpy(audio_chunk).float(), sample_rate).item()), p > self.threshold
         except VADError:
             raise
         except Exception as e:

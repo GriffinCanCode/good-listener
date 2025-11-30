@@ -32,7 +32,7 @@ class TranscriptionService:
             raise TranscriptionError("Empty audio input", code=pb.AUDIO_EMPTY_INPUT)
         try:
             kwargs = {"beam_size": WHISPER_BEAM_SIZE, **({"language": language} if language else {})}
-            segments, info = self.model.transcribe(audio_data.flatten().astype(np.float32), **kwargs)
+            segments, info = self.model.transcribe(audio_data.ravel().astype(np.float32, copy=False), **kwargs)
             return " ".join(s.text for s in segments).strip(), getattr(info, "language_probability", 1.0)
         except TranscriptionError:
             raise

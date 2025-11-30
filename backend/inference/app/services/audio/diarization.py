@@ -40,7 +40,9 @@ class DiarizationService:
 
                 self._torch = torch
                 self.device = torch.device(self.device_name)
-                self._pipeline = Pipeline.from_pretrained(self.model_name, token=self.auth_token)
+                # Whitelist TorchVersion for pyannote checkpoints (PyTorch 2.6+ security)
+                with torch.serialization.safe_globals([torch.torch_version.TorchVersion]):
+                    self._pipeline = Pipeline.from_pretrained(self.model_name, token=self.auth_token)
                 self._pipeline.to(self.device)
                 logger.info(f"DiarizationService initialized: model={self.model_name}, device={self.device_name}")
             except Exception as e:
@@ -60,7 +62,7 @@ class DiarizationService:
         try:
             # Ensure pipeline is loaded
             pipeline = self.pipeline
-            waveform = self._torch.tensor(audio.flatten(), dtype=self._torch.float32).unsqueeze(0)
+            waveform = self._torch.from_numpy(audio.flatten()).float().unsqueeze(0)
             diarization = pipeline(
                 {"waveform": waveform, "sample_rate": sample_rate},
                 min_speakers=min_speakers,
