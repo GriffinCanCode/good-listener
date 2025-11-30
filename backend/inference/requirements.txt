@@ -1,6 +1,7 @@
 # gRPC
 grpcio>=1.60.0
 grpcio-tools>=1.60.0
+grpcio-health-checking>=1.60.0
 
 # ML/AI
 faster-whisper>=1.0.0
