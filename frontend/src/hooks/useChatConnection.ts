@@ -40,6 +40,12 @@ interface WsMessageAutoChunk {
 interface WsMessageAutoDone {
   type: 'auto_done';
 }
+interface WsMessageVAD {
+  type: 'vad';
+  probability: number;
+  is_speech: boolean;
+  source: 'user' | 'system';
+}
 
 type WsMessage =
   | WsMessageStart
@@ -49,38 +55,49 @@ type WsMessage =
   | WsMessageTranscript
   | WsMessageAutoStart
   | WsMessageAutoChunk
-  | WsMessageAutoDone;
+  | WsMessageAutoDone
+  | WsMessageVAD;
 
 const getBackoffDelay = (attempt: number): number => {
   const exponential = Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_MAX_MS);
-  const jitter = exponential * JITTER_FACTOR * Math.random();
-  return exponential + jitter;
+  return exponential + exponential * JITTER_FACTOR * Math.random();
 };
 
 export const useChatConnection = () => {
   const ws = useRef<WebSocket | null>(null);
   const reconnectAttempt = useRef(0);
   const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mountedRef = useRef(true);
 
-  // We use selectors to avoid re-renders if possible, but here we just destructure actions which are stable
-  const setStatus = useChatStore((state) => state.setStatus);
-  const setStream = useChatStore((state) => state.setStream);
-  const appendStreamToContent = useChatStore((state) => state.appendStreamToContent);
-  const commitStreamToMessage = useChatStore((state) => state.commitStreamToMessage);
-  const addMessageToCurrent = useChatStore((state) => state.addMessageToCurrent);
-  const updateCurrentSessionTitle = useChatStore((state) => state.updateCurrentSessionTitle);
-  const addTranscript = useChatStore((state) => state.addTranscript);
-  const startAutoAnswer = useChatStore((state) => state.startAutoAnswer);
-  const appendAutoAnswer = useChatStore((state) => state.appendAutoAnswer);
-  const finishAutoAnswer = useChatStore((state) => state.finishAutoAnswer);
-  const status = useChatStore((state) => state.status);
+  const setStatus = useChatStore((s) => s.setStatus);
+  const setStream = useChatStore((s) => s.setStream);
+  const appendStreamToContent = useChatStore((s) => s.appendStreamToContent);
+  const commitStreamToMessage = useChatStore((s) => s.commitStreamToMessage);
+  const addMessageToCurrent = useChatStore((s) => s.addMessageToCurrent);
+  const updateCurrentSessionTitle = useChatStore((s) => s.updateCurrentSessionTitle);
+  const addTranscript = useChatStore((s) => s.addTranscript);
+  const startAutoAnswer = useChatStore((s) => s.startAutoAnswer);
+  const appendAutoAnswer = useChatStore((s) => s.appendAutoAnswer);
+  const finishAutoAnswer = useChatStore((s) => s.finishAutoAnswer);
+  const updateVAD = useChatStore((s) => s.updateVAD);
 
   const connect = useCallback(() => {
-    if (ws.current?.readyState === WebSocket.OPEN) return;
+    if (!mountedRef.current) return;
+    // Only skip if there's an active connection
+    if (
+      ws.current &&
+      (ws.current.readyState === WebSocket.OPEN || ws.current.readyState === WebSocket.CONNECTING)
+    )
+      return;
 
-    ws.current = new WebSocket(WS_URL);
+    // Clear any stale reference
+    ws.current = null;
 
-    ws.current.onopen = () => {
+    const socket = new WebSocket(WS_URL);
+    ws.current = socket;
+
+    socket.onopen = () => {
+      if (!mountedRef.current) return;
       if (reconnectTimeout.current) {
         clearTimeout(reconnectTimeout.current);
         reconnectTimeout.current = null;
@@ -88,14 +105,19 @@ export const useChatConnection = () => {
       reconnectAttempt.current = 0;
       setStatus('connected');
     };
-    ws.current.onclose = () => {
-      setStatus('disconnected');
-      const delay = getBackoffDelay(reconnectAttempt.current);
-      reconnectAttempt.current++;
-      reconnectTimeout.current = setTimeout(connect, delay);
+
+    socket.onerror = () => {
+      /* onclose handles reconnection */
     };
 
-    ws.current.onmessage = (e: MessageEvent<string>) => {
+    socket.onclose = () => {
+      if (!mountedRef.current) return;
+      ws.current = null;
+      setStatus('disconnected');
+      reconnectTimeout.current = setTimeout(connect, getBackoffDelay(reconnectAttempt.current++));
+    };
+
+    socket.onmessage = (e: MessageEvent<string>) => {
       try {
         const data = JSON.parse(e.data) as WsMessage;
         switch (data.type) {
@@ -123,9 +145,12 @@ export const useChatConnection = () => {
           case 'auto_done':
             finishAutoAnswer();
             break;
+          case 'vad':
+            updateVAD(data.probability, data.is_speech, data.source);
+            break;
         }
-      } catch (error) {
-        console.error('Failed to parse WebSocket message:', error);
+      } catch {
+        /* ignore parse errors */
       }
     };
   }, [
@@ -138,50 +163,60 @@ export const useChatConnection = () => {
     startAutoAnswer,
     appendAutoAnswer,
     finishAutoAnswer,
+    updateVAD,
   ]);
 
   useEffect(() => {
+    mountedRef.current = true;
     connect();
     return () => {
-      if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current);
-      ws.current?.close();
+      mountedRef.current = false;
+      if (reconnectTimeout.current) {
+        clearTimeout(reconnectTimeout.current);
+        reconnectTimeout.current = null;
+      }
+      if (ws.current) {
+        // Detach handlers to prevent callbacks after unmount
+        ws.current.onopen = null;
+        ws.current.onclose = null;
+        ws.current.onerror = null;
+        ws.current.onmessage = null;
+        // Only close if actually open (closing CONNECTING state logs console errors)
+        if (ws.current.readyState === WebSocket.OPEN) {
+          ws.current.close(1000);
+        }
+        ws.current = null;
+      }
     };
   }, [connect]);
 
-  const sendMessage = (content: string) => {
-    if (!content.trim() || status !== 'connected') return;
+  const sendMessage = useCallback(
+    (content: string) => {
+      if (!content.trim()) return;
 
-    // Start trace for this chat request
-    const { ctx, end } = startTrace('chat_request');
+      // Check current connection status and WebSocket state
+      const { status } = useChatStore.getState();
+      if (status !== 'connected' || !ws.current || ws.current.readyState !== WebSocket.OPEN) return;
 
-    // Get current state to check if first message
-    const state = useChatStore.getState();
-    const currentSession = state.sessions.find((s) => s.id === state.currentSessionId);
-    const isFirstMessage = currentSession?.messages.length === 0;
+      const { ctx, end } = startTrace('chat_request');
+      const state = useChatStore.getState();
+      const currentSession = state.sessions.find((s) => s.id === state.currentSessionId);
+      const isFirstMessage = currentSession?.messages.length === 0;
 
-    // Optimistic update
-    addMessageToCurrent({ role: 'user', content });
+      addMessageToCurrent({ role: 'user', content });
+      ws.current.send(JSON.stringify({ type: 'chat', message: content, trace_id: ctx.traceId }));
+      end();
 
-    // Send to WS with trace context
-    ws.current?.send(
-      JSON.stringify({
-        type: 'chat',
-        message: content,
-        trace_id: ctx.traceId,
-      })
-    );
-
-    // End trace (ideally this would be called on 'done' message, but for now we call it here)
-    end();
-
-    // Update title if first message
-    if (isFirstMessage) {
-      const title =
-        content.slice(0, SESSION_TITLE_MAX_LENGTH) +
-        (content.length > SESSION_TITLE_MAX_LENGTH ? '...' : '');
-      updateCurrentSessionTitle(title);
-    }
-  };
+      if (isFirstMessage) {
+        const title =
+          content.length > SESSION_TITLE_MAX_LENGTH
+            ? content.slice(0, SESSION_TITLE_MAX_LENGTH) + '...'
+            : content;
+        updateCurrentSessionTitle(title);
+      }
+    },
+    [addMessageToCurrent, updateCurrentSessionTitle]
+  );
 
   return { sendMessage };
 };

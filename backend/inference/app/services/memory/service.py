@@ -4,8 +4,6 @@ from contextlib import contextmanager
 from pathlib import Path
 from queue import Empty, Queue
 
-import chromadb
-
 from app.core import get_logger
 from app.services.constants import (
     CHUNK_ENABLED,
@@ -23,7 +21,6 @@ from app.services.constants import (
     UNIQUENESS_NEIGHBOR_COUNT,
     UNIQUENESS_SAMPLE_SIZE,
 )
-from app.services.memory.chunker import SemanticChunker
 
 logger = get_logger(__name__)
 
@@ -33,10 +30,11 @@ class ChromaPool:
 
     def __init__(self, persistence_path: str, pool_size: int = POOL_SIZE_DEFAULT, collection_name: str = "user_context"):
         self._path, self._pool_size, self._collection_name = persistence_path, pool_size, collection_name
-        self._pool: Queue[tuple[chromadb.PersistentClient, chromadb.Collection]] = Queue(maxsize=pool_size)
+        self._pool: Queue = Queue(maxsize=pool_size)
         self._lock, self._initialized = threading.Lock(), False
 
-    def _create_client(self) -> tuple[chromadb.PersistentClient, chromadb.Collection]:
+    def _create_client(self):
+        import chromadb
         client = chromadb.PersistentClient(path=self._path)
         return client, client.get_or_create_collection(name=self._collection_name, metadata={"hnsw:space": "cosine"})
 
@@ -95,7 +93,7 @@ class MemoryService:
         Path(persistence_path).mkdir(parents=True, exist_ok=True)
         self._pool = ChromaPool(persistence_path, pool_size)
         self._chunking_enabled = chunking_enabled
-        self._chunker: SemanticChunker | None = None
+        self._chunker = None  # Lazy-loaded SemanticChunker
         # Legacy attributes for backwards compatibility
         self.client, self.collection = None, None
         if self._pool.initialize():
@@ -104,9 +102,10 @@ class MemoryService:
             logger.info(f"MemoryService initialized with pool at {self.persistence_path}")
 
     @property
-    def chunker(self) -> SemanticChunker:
+    def chunker(self):
         """Lazy-load semantic chunker."""
         if self._chunker is None:
+            from app.services.memory.chunker import SemanticChunker
             self._chunker = SemanticChunker(
                 similarity_threshold=CHUNK_SIMILARITY_THRESHOLD,
                 min_chunk_size=CHUNK_MIN_SIZE,

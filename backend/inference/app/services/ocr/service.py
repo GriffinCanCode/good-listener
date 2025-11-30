@@ -2,7 +2,6 @@ import asyncio
 
 import numpy as np
 from PIL import Image
-from rapidocr_onnxruntime import RapidOCR
 
 from app.core import get_logger
 
@@ -11,12 +10,19 @@ logger = get_logger(__name__)
 
 class OCRService:
     def __init__(self) -> None:
-        try:
-            self.engine = RapidOCR()
-            logger.info("RapidOCR initialized.")
-        except Exception:
-            logger.exception("RapidOCR init failed")
-            self.engine = None
+        self._engine = None
+
+    @property
+    def engine(self):
+        """Lazy-load RapidOCR on first use."""
+        if self._engine is None:
+            try:
+                from rapidocr_onnxruntime import RapidOCR
+                self._engine = RapidOCR()
+                logger.info("RapidOCR initialized.")
+            except Exception:
+                logger.exception("RapidOCR init failed")
+        return self._engine
 
     def extract_text(self, image: Image.Image) -> str:
         if not self.engine or not image:

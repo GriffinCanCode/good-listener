@@ -4,7 +4,6 @@ import re
 from dataclasses import dataclass, field
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 from app.core import get_logger
 
@@ -36,13 +35,14 @@ class SemanticChunker:
         self.threshold = similarity_threshold
         self.min_size = min_chunk_size
         self.max_size = max_chunk_size
-        self._model: SentenceTransformer | None = None
+        self._model = None
         self._model_name = model_name
 
     @property
-    def model(self) -> SentenceTransformer:
+    def model(self):
         """Lazy-load embedding model."""
         if self._model is None:
+            from sentence_transformers import SentenceTransformer
             self._model = SentenceTransformer(self._model_name)
             logger.info(f"Loaded chunker model: {self._model_name}")
         return self._model

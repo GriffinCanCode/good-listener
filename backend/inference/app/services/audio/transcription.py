@@ -1,7 +1,6 @@
 """Whisper-based speech-to-text transcription service."""
 
 import numpy as np
-from faster_whisper import WhisperModel
 
 from app.core import get_logger
 from app.services.constants import WHISPER_BEAM_SIZE
@@ -11,8 +10,17 @@ logger = get_logger(__name__)
 
 class TranscriptionService:
     def __init__(self, model_size: str = "tiny", device: str = "cpu", compute_type: str = "int8"):
-        self.model = WhisperModel(model_size, device=device, compute_type=compute_type)
-        logger.info(f"TranscriptionService initialized: model={model_size}, device={device}")
+        self._model_size, self._device, self._compute_type = model_size, device, compute_type
+        self._model = None
+
+    @property
+    def model(self):
+        """Lazy-load Whisper model on first use."""
+        if self._model is None:
+            from faster_whisper import WhisperModel
+            self._model = WhisperModel(self._model_size, device=self._device, compute_type=self._compute_type)
+            logger.info(f"TranscriptionService initialized: model={self._model_size}, device={self._device}")
+        return self._model
 
     def transcribe(self, audio_data: np.ndarray, language: str | None = None) -> tuple[str, float]:
         """Transcribe audio to text. Args: audio_data (Float32 PCM @ 16kHz), language (optional hint). Returns: (text, confidence)."""
