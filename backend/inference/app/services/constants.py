@@ -42,3 +42,9 @@ SAMPLES_PER_SECOND = 16000  # 16kHz standard
 # Summarization
 SUMMARY_MIN_INPUT_LENGTH = 200  # Minimum transcript length to summarize
 
+# Semantic Chunking
+CHUNK_SIMILARITY_THRESHOLD = 0.5  # Below this = semantic breakpoint
+CHUNK_MIN_SIZE = 50  # Minimum chars per chunk
+CHUNK_MAX_SIZE = 500  # Maximum chars per chunk
+CHUNK_ENABLED = True  # Enable semantic chunking for batch stores
+

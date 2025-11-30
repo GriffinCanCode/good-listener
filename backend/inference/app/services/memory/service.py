@@ -8,6 +8,10 @@ import chromadb
 
 from app.core import get_logger
 from app.services.constants import (
+    CHUNK_ENABLED,
+    CHUNK_MAX_SIZE,
+    CHUNK_MIN_SIZE,
+    CHUNK_SIMILARITY_THRESHOLD,
     DEDUP_NEIGHBOR_COUNT,
     DEDUP_SAMPLE_SIZE,
     MEMORY_PRUNE_KEEP,
@@ -19,6 +23,7 @@ from app.services.constants import (
     UNIQUENESS_NEIGHBOR_COUNT,
     UNIQUENESS_SAMPLE_SIZE,
 )
+from app.services.memory.chunker import SemanticChunker
 
 logger = get_logger(__name__)
 
@@ -85,16 +90,29 @@ class MemoryService:
     CLUSTER_THRESHOLD = 0.75  # Semantic cluster membership
     PROTECTED_ACCESS_COUNT = 5  # Memories with >= this access count are protected
 
-    def __init__(self, persistence_path: str = "data/chroma_db", pool_size: int = POOL_SIZE_DEFAULT):
+    def __init__(self, persistence_path: str = "data/chroma_db", pool_size: int = POOL_SIZE_DEFAULT, chunking_enabled: bool = CHUNK_ENABLED):
         self.persistence_path = persistence_path
         Path(persistence_path).mkdir(parents=True, exist_ok=True)
         self._pool = ChromaPool(persistence_path, pool_size)
+        self._chunking_enabled = chunking_enabled
+        self._chunker: SemanticChunker | None = None
         # Legacy attributes for backwards compatibility
         self.client, self.collection = None, None
         if self._pool.initialize():
             with self._pool.acquire() as (client, collection):
                 self.client, self.collection = client, collection
             logger.info(f"MemoryService initialized with pool at {self.persistence_path}")
+
+    @property
+    def chunker(self) -> SemanticChunker:
+        """Lazy-load semantic chunker."""
+        if self._chunker is None:
+            self._chunker = SemanticChunker(
+                similarity_threshold=CHUNK_SIMILARITY_THRESHOLD,
+                min_chunk_size=CHUNK_MIN_SIZE,
+                max_chunk_size=CHUNK_MAX_SIZE,
+            )
+        return self._chunker
 
     def add_memory(self, text: str, source: str, metadata: dict | None = None) -> str | None:
         """Add text to vector store and prune if needed. Returns doc_id on success."""
@@ -117,10 +135,16 @@ class MemoryService:
             return None
 
     def add_memories_batch(self, items: list[tuple[str, str, dict | None]]) -> list[str]:
-        """Batch add multiple memories. Items are (text, source, metadata) tuples."""
+        """Batch add multiple memories with semantic chunking. Items are (text, source, metadata) tuples."""
         if not items:
             return []
+
         now, tid, ms = time.time(), threading.get_ident(), int(time.time() * 1000)
+
+        # Apply semantic chunking if enabled
+        if self._chunking_enabled:
+            items = self._chunk_items(items)
+
         entries = [(text, {**(m := meta or {}), "source": src, "timestamp": m.get("timestamp", now), "access_count": 0},
                     f"{src}_{ms}_{tid}_{i}") for i, (text, src, meta) in enumerate(items) if text.strip()]
         if not entries:
@@ -131,13 +155,34 @@ class MemoryService:
                 if not collection:
                     return []
                 collection.add(documents=list(docs), metadatas=list(metas), ids=list(ids))
-                logger.debug(f"Batch added {len(ids)} memories")
+                logger.debug(f"Batch added {len(ids)} memories (chunking={self._chunking_enabled})")
                 if collection.count() > MEMORY_PRUNE_THRESHOLD:
                     self._prune_smart()
             return list(ids)
         except Exception:
             logger.exception("Error batch adding memories")
             return []
+
+    def _chunk_items(self, items: list[tuple[str, str, dict | None]]) -> list[tuple[str, str, dict | None]]:
+        """Apply semantic chunking to batch items, grouping by source."""
+        # Group items by source for better chunking context
+        by_source: dict[str, list[tuple[str, dict | None]]] = {}
+        for text, source, meta in items:
+            if text.strip():
+                by_source.setdefault(source, []).append((text, meta))
+
+        result = []
+        for source, texts_metas in by_source.items():
+            texts = [t for t, _ in texts_metas]
+            # Use first item's metadata as base (chunks inherit source metadata)
+            base_meta = texts_metas[0][1]
+
+            # Chunk the texts for this source
+            chunks = self.chunker.chunk_batch(texts, merge_related=True)
+            for chunk in chunks:
+                result.append((chunk, source, base_meta))
+
+        return result
 
     def _compute_importance(
         self, timestamp: float, access_count: int, uniqueness: float, now: float, max_age: float, max_access: int
