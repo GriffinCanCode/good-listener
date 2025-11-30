@@ -1,6 +1,6 @@
 import { app, globalShortcut } from 'electron';
-import { createMainWindow, getMainWindow } from './window';
 import { registerIpcHandlers } from './ipc';
+import { createMainWindow, getMainWindow } from './window';
 
 // Ensure single instance
 const gotTheLock = app.requestSingleInstanceLock();
@@ -16,7 +16,7 @@ if (!gotTheLock) {
     }
   });
 
-  app.whenReady().then(() => {
+  void app.whenReady().then(() => {
     // Register all IPC handlers
     registerIpcHandlers();
 
@@ -54,4 +54,3 @@ if (!gotTheLock) {
     globalShortcut.unregisterAll();
   });
 }
-

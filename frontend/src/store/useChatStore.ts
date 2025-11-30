@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { persist, createJSONStorage } from 'zustand/middleware';
-import { Session, Message, ConnectionStatus, Transcript, AutoAnswer } from '../types';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import type { AutoAnswer, ConnectionStatus, Message, Session, Transcript } from '../types';
 
 interface ChatState {
   sessions: Session[];
@@ -27,7 +27,7 @@ interface ChatState {
   appendAutoAnswer: (content: string) => void;
   finishAutoAnswer: () => void;
   dismissAutoAnswer: () => void;
-  
+
   // Computeds
   getCurrentSession: () => Session | undefined;
 }
@@ -50,13 +50,13 @@ export const useChatStore = create<ChatState>()(
       createSession: () => {
         const { sessions, currentSessionId } = get();
         const currentSession = sessions.find((s) => s.id === currentSessionId);
-        
+
         // Reuse current session if it's empty
         if (currentSession?.messages.length === 0) {
           set({ stream: '' });
           return;
         }
-        
+
         const newSession: Session = {
           id: Date.now().toString(),
           title: 'New Chat',
@@ -74,23 +74,23 @@ export const useChatStore = create<ChatState>()(
         set((state) => {
           const newSessions = state.sessions.filter((s) => s.id !== id);
           let newCurrentId = state.currentSessionId;
-          
+
           if (state.currentSessionId === id) {
-            newCurrentId = newSessions.length > 0 ? newSessions[0].id : null;
+            newCurrentId = newSessions[0]?.id ?? null;
           }
-          
+
           if (newSessions.length === 0 && state.currentSessionId === id) {
-             const replacementSession: Session = {
-                id: Date.now().toString(),
-                title: 'New Chat',
-                date: new Date().toISOString(),
-                messages: [],
-             };
-             return { 
-                 sessions: [replacementSession], 
-                 currentSessionId: replacementSession.id,
-                 stream: ''
-             };
+            const replacementSession: Session = {
+              id: Date.now().toString(),
+              title: 'New Chat',
+              date: new Date().toISOString(),
+              messages: [],
+            };
+            return {
+              sessions: [replacementSession],
+              currentSessionId: replacementSession.id,
+              stream: '',
+            };
           }
 
           return {
@@ -107,9 +107,7 @@ export const useChatStore = create<ChatState>()(
       addMessageToCurrent: (message) => {
         set((state) => ({
           sessions: state.sessions.map((s) =>
-            s.id === state.currentSessionId
-              ? { ...s, messages: [...s.messages, message] }
-              : s
+            s.id === state.currentSessionId ? { ...s, messages: [...s.messages, message] } : s
           ),
         }));
       },
@@ -123,9 +121,8 @@ export const useChatStore = create<ChatState>()(
       },
 
       setStream: (content) => set({ stream: content }),
-      
-      appendStreamToContent: (content) => 
-        set((state) => ({ stream: state.stream + content })),
+
+      appendStreamToContent: (content) => set((state) => ({ stream: state.stream + content })),
 
       commitStreamToMessage: () => {
         const { stream, addMessageToCurrent, setStream } = get();
@@ -137,67 +134,69 @@ export const useChatStore = create<ChatState>()(
 
       clearStream: () => set({ stream: '' }),
       setStatus: (status) => set({ status }),
-      
+
       addTranscript: (text, source) => {
         set((state) => {
-            // Deduplication logic
-            const now = Date.now();
-            const lastTranscript = state.liveTranscripts[state.liveTranscripts.length - 1];
-            
-            // If same text and source within 1 second, ignore
-            if (lastTranscript && 
-                lastTranscript.text === text && 
-                lastTranscript.source === source && 
-                (now - lastTranscript.timestamp) < 1000) {
-                return state;
-            }
+          // Deduplication logic
+          const now = Date.now();
+          const lastTranscript = state.liveTranscripts[state.liveTranscripts.length - 1];
 
-            return {
-                liveTranscripts: [
-                    ...state.liveTranscripts,
-                    {
-                        id: now.toString() + Math.random(),
-                        text,
-                        source: source as 'user' | 'system',
-                        timestamp: now
-                    }
-                ].slice(-50)
-            };
+          // If same text and source within 1 second, ignore
+          if (
+            lastTranscript?.text === text &&
+            lastTranscript.source === source &&
+            now - lastTranscript.timestamp < 1000
+          ) {
+            return state;
+          }
+
+          return {
+            liveTranscripts: [
+              ...state.liveTranscripts,
+              {
+                id: `${now}-${Math.random().toString(36).slice(2)}`,
+                text,
+                source: source as 'user' | 'system',
+                timestamp: now,
+              },
+            ].slice(-50),
+          };
         });
       },
-      
+
       clearTranscripts: () => set({ liveTranscripts: [] }),
-      
-      startAutoAnswer: (question) => set({
-        autoAnswer: {
-          id: Date.now().toString(),
-          question,
-          content: '',
-          isStreaming: true,
-          timestamp: Date.now()
-        }
-      }),
-      
-      appendAutoAnswer: (content) => set((state) => ({
-        autoAnswer: state.autoAnswer 
-          ? { ...state.autoAnswer, content: state.autoAnswer.content + content }
-          : null
-      })),
-      
-      finishAutoAnswer: () => set((state) => ({
-        autoAnswer: state.autoAnswer 
-          ? { ...state.autoAnswer, isStreaming: false }
-          : null
-      })),
-      
+
+      startAutoAnswer: (question) =>
+        set({
+          autoAnswer: {
+            id: Date.now().toString(),
+            question,
+            content: '',
+            isStreaming: true,
+            timestamp: Date.now(),
+          },
+        }),
+
+      appendAutoAnswer: (content) =>
+        set((state) => ({
+          autoAnswer: state.autoAnswer
+            ? { ...state.autoAnswer, content: state.autoAnswer.content + content }
+            : null,
+        })),
+
+      finishAutoAnswer: () =>
+        set((state) => ({
+          autoAnswer: state.autoAnswer ? { ...state.autoAnswer, isStreaming: false } : null,
+        })),
+
       dismissAutoAnswer: () => set({ autoAnswer: null }),
     }),
     {
       name: 'chat_sessions',
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ 
+      partialize: (state) => ({
         sessions: state.sessions.filter((s) => s.messages.length > 0),
-        currentSessionId: state.currentSessionId 
+        currentSessionId: state.currentSessionId,
       }),
     }
   )

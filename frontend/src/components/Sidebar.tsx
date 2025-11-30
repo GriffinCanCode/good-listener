@@ -1,18 +1,13 @@
+import { AnimatePresence, motion } from 'framer-motion';
+import { MessageSquare, Plus, Trash2, X } from 'lucide-react';
 import React from 'react';
-import { MessageSquare, Trash2, Plus, X } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { useChatStore } from '../store/useChatStore';
 import { useUIStore } from '../store/useUIStore';
 
 export const Sidebar: React.FC = () => {
-  const { 
-    sessions, 
-    currentSessionId, 
-    selectSession, 
-    createSession, 
-    deleteSession 
-  } = useChatStore();
-  
+  const { sessions, currentSessionId, selectSession, createSession, deleteSession } =
+    useChatStore();
+
   const { isSidebarOpen, setSidebarOpen } = useUIStore();
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
@@ -33,7 +28,7 @@ export const Sidebar: React.FC = () => {
             onClick={() => setSidebarOpen(false)}
             className="sidebar-backdrop"
           />
-          
+
           {/* Sidebar */}
           <motion.div
             initial={{ x: '-100%' }}
@@ -56,11 +51,9 @@ export const Sidebar: React.FC = () => {
 
             <div className="session-list">
               {sessions.length === 0 ? (
-                <div className="empty-history">
-                  No history yet.
-                </div>
+                <div className="empty-history">No history yet.</div>
               ) : (
-                sessions.map(session => (
+                sessions.map((session) => (
                   <div
                     key={session.id}
                     onClick={() => selectSession(session.id)}
@@ -68,10 +61,7 @@ export const Sidebar: React.FC = () => {
                   >
                     <MessageSquare size={16} className="session-icon" />
                     <span className="session-title">{session.title}</span>
-                    <button
-                      onClick={(e) => handleDelete(session.id, e)}
-                      className="delete-btn"
-                    >
+                    <button onClick={(e) => handleDelete(session.id, e)} className="delete-btn">
                       <Trash2 size={14} />
                     </button>
                   </div>

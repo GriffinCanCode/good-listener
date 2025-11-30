@@ -7,7 +7,7 @@
 const randomHex = (bytes: number): string => {
   const arr = new Uint8Array(bytes);
   crypto.getRandomValues(arr);
-  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
 };
 
 /** Generate 128-bit trace ID (W3C standard) */
@@ -36,7 +36,7 @@ export const childSpan = (parent: TraceContext): TraceContext => ({
   parentSpanId: parent.spanId,
 });
 
-/** 
+/**
  * Console logging with trace context.
  * In production, this could be extended to send to a backend collector.
  */
@@ -51,18 +51,18 @@ export const traceLog = (
   logFn(`${prefix} ${message}`, extra ?? '');
 };
 
-/** 
+/**
  * Create a traced operation wrapper.
  * Returns the trace context for inclusion in outgoing requests.
  */
 export const startTrace = (name: string): { ctx: TraceContext; end: () => void } => {
   const ctx = createTrace();
   const start = performance.now();
-  
+
   if (import.meta.env.DEV) {
     traceLog('debug', `→ ${name}`, ctx);
   }
-  
+
   return {
     ctx,
     end: () => {
@@ -73,4 +73,3 @@ export const startTrace = (name: string): { ctx: TraceContext; end: () => void }
     },
   };
 };
-

@@ -1,7 +1,7 @@
+import { AnimatePresence, motion } from 'framer-motion';
+import { Mic, Monitor } from 'lucide-react';
 import React, { useEffect, useRef } from 'react';
 import { useChatStore } from '../store/useChatStore';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, Monitor } from 'lucide-react';
 
 export const LiveTranscript: React.FC = () => {
   const transcripts = useChatStore((state) => state.liveTranscripts);
@@ -14,13 +14,11 @@ export const LiveTranscript: React.FC = () => {
   }, [transcripts]);
 
   if (transcripts.length === 0) {
-      return (
-        <div className="live-transcript-container empty">
-            <div className="empty-message">
-                Waiting for audio...
-            </div>
-        </div>
-      );
+    return (
+      <div className="live-transcript-container empty">
+        <div className="empty-message">Waiting for audio...</div>
+      </div>
+    );
   }
 
   return (
@@ -40,9 +38,7 @@ export const LiveTranscript: React.FC = () => {
                 {t.source === 'user' ? <Mic size={14} /> : <Monitor size={14} />}
               </div>
               <div className="transcript-content">
-                <span className="transcript-source">
-                  {t.source === 'user' ? 'You' : 'System'}
-                </span>
+                <span className="transcript-source">{t.source === 'user' ? 'You' : 'System'}</span>
                 <p>{t.text}</p>
               </div>
             </motion.div>

@@ -1,5 +1,5 @@
-import { BrowserWindow, screen, shell } from 'electron';
 import { join } from 'path';
+import { BrowserWindow, screen, shell } from 'electron';
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -37,15 +37,16 @@ export function createMainWindow(): BrowserWindow {
 
   // Handle external links
   mainWindow.webContents.setWindowOpenHandler(({ url }: { url: string }) => {
-    shell.openExternal(url);
+    void shell.openExternal(url);
     return { action: 'deny' };
   });
 
   // Load the app
-  if (process.env.ELECTRON_RENDERER_URL) {
-    mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
+  const rendererUrl = process.env['ELECTRON_RENDERER_URL'];
+  if (rendererUrl) {
+    void mainWindow.loadURL(rendererUrl);
   } else {
-    mainWindow.loadFile(join(__dirname, '../../dist/index.html'));
+    void mainWindow.loadFile(join(__dirname, '../../dist/index.html'));
   }
 
   // Show when ready
@@ -67,4 +68,3 @@ export function getMainWindow(): BrowserWindow | null {
 export function resizeWindow(width: number, height: number): void {
   mainWindow?.setSize(width, height, true);
 }
-

@@ -10,29 +10,30 @@ export const IPC_CHANNELS = {
   WINDOW_MAXIMIZE: 'window:maximize',
   WINDOW_CLOSE: 'window:close',
   WINDOW_RESIZE: 'window:resize',
-  
+
   // Events from main -> renderer
   WINDOW_SHOWN: 'window:shown',
   WINDOW_STATE_CHANGED: 'window:state-changed',
 } as const;
 
 // Derive types from the const object
-export type IpcChannel = typeof IPC_CHANNELS[keyof typeof IPC_CHANNELS];
+export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
 // Payload types for each channel
 export interface IpcPayloads {
-  [IPC_CHANNELS.WINDOW_MINIMIZE]: void;
-  [IPC_CHANNELS.WINDOW_MAXIMIZE]: void;
-  [IPC_CHANNELS.WINDOW_CLOSE]: void;
+  [IPC_CHANNELS.WINDOW_MINIMIZE]: undefined;
+  [IPC_CHANNELS.WINDOW_MAXIMIZE]: undefined;
+  [IPC_CHANNELS.WINDOW_CLOSE]: undefined;
   [IPC_CHANNELS.WINDOW_RESIZE]: { width: number; height: number };
-  [IPC_CHANNELS.WINDOW_SHOWN]: void;
+  [IPC_CHANNELS.WINDOW_SHOWN]: undefined;
   [IPC_CHANNELS.WINDOW_STATE_CHANGED]: { isMaximized: boolean; isMinimized: boolean };
 }
 
 // Type helper for invoke channels (request -> response)
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface IpcInvokeMap {
   // Add invoke channels here as needed
-  // 'app:get-version': { request: void; response: string };
+  // 'app:get-version': { request: undefined; response: string };
 }
 
 // Type-safe API exposed to renderer
@@ -43,14 +44,15 @@ export interface ElectronAPI {
     close: () => void;
     resize: (width: number, height: number) => void;
     onShown: (callback: () => void) => () => void;
-    onStateChanged: (callback: (state: { isMaximized: boolean; isMinimized: boolean }) => void) => () => void;
+    onStateChanged: (
+      callback: (state: { isMaximized: boolean; isMinimized: boolean }) => void
+    ) => () => void;
   };
   platform: NodeJS.Platform;
 }
 
 declare global {
   interface Window {
-    electron: ElectronAPI;
+    electron?: ElectronAPI;
   }
 }
-

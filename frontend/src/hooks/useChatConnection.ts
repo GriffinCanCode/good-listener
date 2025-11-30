@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useChatStore } from '../store/useChatStore';
 import { startTrace } from '../trace';
 
@@ -6,6 +6,48 @@ const WS_URL = 'ws://127.0.0.1:8000/ws';
 const BACKOFF_BASE_MS = 1000;
 const BACKOFF_MAX_MS = 30000;
 const JITTER_FACTOR = 0.5;
+
+// WebSocket message types
+interface WsMessageStart {
+  type: 'start';
+}
+interface WsMessageChunk {
+  type: 'chunk';
+  content: string;
+}
+interface WsMessageDone {
+  type: 'done';
+}
+interface WsMessageInsight {
+  type: 'insight';
+  content: string;
+}
+interface WsMessageTranscript {
+  type: 'transcript';
+  text: string;
+  source: string;
+}
+interface WsMessageAutoStart {
+  type: 'auto_start';
+  question: string;
+}
+interface WsMessageAutoChunk {
+  type: 'auto_chunk';
+  content: string;
+}
+interface WsMessageAutoDone {
+  type: 'auto_done';
+}
+
+type WsMessage =
+  | WsMessageStart
+  | WsMessageChunk
+  | WsMessageDone
+  | WsMessageInsight
+  | WsMessageTranscript
+  | WsMessageAutoStart
+  | WsMessageAutoChunk
+  | WsMessageAutoDone;
 
 const getBackoffDelay = (attempt: number): number => {
   const exponential = Math.min(BACKOFF_BASE_MS * 2 ** attempt, BACKOFF_MAX_MS);
@@ -16,7 +58,7 @@ const getBackoffDelay = (attempt: number): number => {
 export const useChatConnection = () => {
   const ws = useRef<WebSocket | null>(null);
   const reconnectAttempt = useRef(0);
-  
+
   // We use selectors to avoid re-renders if possible, but here we just destructure actions which are stable
   const setStatus = useChatStore((state) => state.setStatus);
   const setStream = useChatStore((state) => state.setStream);
@@ -46,9 +88,9 @@ export const useChatConnection = () => {
       setTimeout(connect, delay);
     };
 
-    ws.current.onmessage = (e) => {
+    ws.current.onmessage = (e: MessageEvent<string>) => {
       try {
-        const data = JSON.parse(e.data);
+        const data = JSON.parse(e.data) as WsMessage;
         switch (data.type) {
           case 'start':
             setStream('');
@@ -79,7 +121,17 @@ export const useChatConnection = () => {
         console.error('Failed to parse WebSocket message:', error);
       }
     };
-  }, [setStatus, setStream, appendStreamToContent, commitStreamToMessage, addMessageToCurrent, addTranscript, startAutoAnswer, appendAutoAnswer, finishAutoAnswer]);
+  }, [
+    setStatus,
+    setStream,
+    appendStreamToContent,
+    commitStreamToMessage,
+    addMessageToCurrent,
+    addTranscript,
+    startAutoAnswer,
+    appendAutoAnswer,
+    finishAutoAnswer,
+  ]);
 
   useEffect(() => {
     connect();
@@ -96,26 +148,23 @@ export const useChatConnection = () => {
 
     // Get current state to check if first message
     const state = useChatStore.getState();
-    const currentSession = state.sessions.find(s => s.id === state.currentSessionId);
-    const isFirstMessage = currentSession && currentSession.messages.length === 0;
+    const currentSession = state.sessions.find((s) => s.id === state.currentSessionId);
+    const isFirstMessage = currentSession?.messages.length === 0;
 
     // Optimistic update
     addMessageToCurrent({ role: 'user', content });
 
     // Send to WS with trace context
-    ws.current?.send(JSON.stringify({ 
-      type: 'chat', 
-      message: content,
-      trace_id: ctx.traceId,
-    }));
+    ws.current?.send(
+      JSON.stringify({
+        type: 'chat',
+        message: content,
+        trace_id: ctx.traceId,
+      })
+    );
 
-    // End trace when response completes (via done message)
-    const originalCommit = commitStreamToMessage;
-    const tracedCommit = () => {
-      end();
-      originalCommit();
-    };
-    // Note: The trace end will be called asynchronously when 'done' is received
+    // End trace (ideally this would be called on 'done' message, but for now we call it here)
+    end();
 
     // Update title if first message
     if (isFirstMessage) {
