@@ -4,12 +4,17 @@ from contextlib import asynccontextmanager
 import uvicorn
 import json
 import asyncio
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 from app.services.monitor import BackgroundMonitor
 from app.services.llm import LLMService
 from app.routers import api
 
 monitor = BackgroundMonitor()
-llm_service = LLMService(provider="ollama") 
+llm_service = LLMService(provider="gemini", model_name="gemini-2.0-flash") 
 active_connections: list[WebSocket] = []
 
 async def broadcast_insight(message: str):
@@ -72,7 +77,7 @@ async def websocket_endpoint(websocket: WebSocket):
                 await websocket.send_json({"type": "start", "role": "assistant"})
                 
                 # Stream chunks
-                async for chunk in llm_service.analyze(current_text, user_query):
+                async for chunk in llm_service.analyze(current_text, user_query, monitor.latest_image):
                     await websocket.send_json({"type": "chunk", "content": chunk})
                 
                 # Signal completion

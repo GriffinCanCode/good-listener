@@ -1,5 +1,7 @@
 import asyncio
 import logging
+from typing import Optional
+from PIL import Image
 from app.services.capture import CaptureService
 from app.services.ocr import OCRService
 from app.services.analysis import AnalysisService
@@ -14,13 +16,14 @@ class BackgroundMonitor:
         self.ocr_service = OCRService()
         self.analysis_service = AnalysisService()
         self.audio_service = AudioService() # Using 'tiny' model for speed
-        self.llm_service = LLMService()
+        self.llm_service = LLMService(provider="gemini", model_name="gemini-2.0-flash") # Explicitly set Gemini 2.0 Flash
         
         self._running = False
         self._task = None
         self.latest_insight = ""
         self.latest_text = ""
         self.latest_transcript = ""
+        self.latest_image: Optional[Image.Image] = None
         
         # Callback for WebSocket push (set by main.py)
         self.on_insight = None
@@ -47,25 +50,27 @@ class BackgroundMonitor:
 
     def _handle_transcript(self, text: str):
         """Called by AudioService thread when text is transcribed."""
-        # Schedule processing on the main event loop to avoid blocking the audio thread
         if self._running and hasattr(self, 'loop'):
              asyncio.run_coroutine_threadsafe(self._process_transcript_async(text), self.loop)
 
     async def _process_transcript_async(self, text: str):
         self.latest_transcript = text
         
+        screen_context = self.latest_text[:500] if self.latest_text else "No readable text on screen."
+        
         prompt = f"""
         The user is in a conversation.
         Live Transcript: "{text}"
-        Screen Context: "{self.latest_text[:500]}..."
+        Screen Text Context: "{screen_context}"
         
-        If the transcript contains a question or requires a factual lookup, provide a direct, short answer. 
+        If the transcript contains a question or requires a factual lookup about the screen, provide a direct answer.
+        If the screen has no text but the user asks about it, describe the visual content.
         If it's just chatter/greeting, reply with "NO_RESPONSE".
         """
         
-        # Call async LLM service
+        # Call async LLM service with image
         response_parts = []
-        async for chunk in self.llm_service.analyze(self.latest_text, prompt):
+        async for chunk in self.llm_service.analyze(self.latest_text, prompt, self.latest_image):
             response_parts.append(chunk)
         response = "".join(response_parts)
         
@@ -86,10 +91,11 @@ class BackgroundMonitor:
     async def _process_screen(self):
         if not (image := self.capture_service.capture_screen()):
             return
+        
+        self.latest_image = image
 
-        if not (text := await asyncio.to_thread(self.ocr_service.extract_text, image)):
-            return
-
+        # Use async OCR
+        text = await self.ocr_service.extract_text_async(image)
+        
+        # Update text even if empty (so we know it's empty)
         self.latest_text = text
-        # OCR analysis is less urgent than audio, so we don't push every update
-        # unless specific keywords are found (handled in AnalysisService if linked)

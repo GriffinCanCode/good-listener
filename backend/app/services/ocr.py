@@ -23,3 +23,7 @@ class OCRService:
         except Exception as e:
             logger.error(f"OCR Error: {e}")
             return ""
+
+    async def extract_text_async(self, image: Image.Image) -> str:
+        if not image: return ""
+        return await asyncio.get_running_loop().run_in_executor(None, self.extract_text, image)
