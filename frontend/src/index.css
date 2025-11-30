@@ -374,13 +374,14 @@ body {
 .chat-container {
   flex: 1;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   position: relative;
   overflow: hidden;
 }
 
 .chat-area {
   flex: 1;
+  min-width: 0;
   overflow-y: auto;
   padding: 20px 60px; /* More breathing room */
   display: flex;
@@ -562,6 +563,7 @@ textarea::placeholder {
   border-left: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
 }
 
 .transcript-header {

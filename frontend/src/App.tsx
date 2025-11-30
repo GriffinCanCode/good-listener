@@ -169,15 +169,18 @@ const WelcomeHero: React.FC = () => {
 // Transcript Panel - Slide-in panel with GSAP
 // ═══════════════════════════════════════════════════════════════════════════
 
-const TranscriptPanel: React.FC = () => (
-  <div className="live-transcript-wrapper">
-    <div className="transcript-header">
-      <h3>Live Transcript</h3>
+const TranscriptPanel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  (props, ref) => (
+    <div ref={ref} className="live-transcript-wrapper" {...props}>
+      <div className="transcript-header">
+        <h3>Live Transcript</h3>
+      </div>
+      <VoiceActivityIndicator />
+      <LiveTranscript />
     </div>
-    <VoiceActivityIndicator />
-    <LiveTranscript />
-  </div>
+  )
 );
+TranscriptPanel.displayName = 'TranscriptPanel';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Main App Component
