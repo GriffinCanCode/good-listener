@@ -1,15 +1,17 @@
 import base64
 import io
 import os
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage
-from langchain_google_genai import ChatGoogleGenerativeAI
-from langchain_ollama import ChatOllama
 from PIL import Image
 
 from app.core import get_logger
 from app.services.prompts import ANALYSIS_TEMPLATE
+
+if TYPE_CHECKING:
+    from langchain_google_genai import ChatGoogleGenerativeAI
+    from langchain_ollama import ChatOllama
 
 logger = get_logger(__name__)
 
@@ -30,8 +32,10 @@ class LLMService:
             if not self.api_key:
                 logger.warning("Gemini provider selected but no API key found.")
                 return None
+            from langchain_google_genai import ChatGoogleGenerativeAI
             return ChatGoogleGenerativeAI(model=self.model_name, stream=True)
         elif self.provider == "ollama":
+            from langchain_ollama import ChatOllama
             host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
             return ChatOllama(model=self.model_name, base_url=host)
         return None

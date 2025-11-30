@@ -13,7 +13,7 @@ class TestLLMService:
         from app.services.llm import LLMService
         
         with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
-            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI') as MockGemini:
                 service = LLMService(provider="gemini", model_name="gemini-2.0-flash")
                 
                 assert service.provider == "gemini"
@@ -23,7 +23,7 @@ class TestLLMService:
         """LLMService initializes Ollama provider."""
         from app.services.llm import LLMService
         
-        with patch('app.services.llm.ChatOllama') as MockOllama:
+        with patch('langchain_ollama.ChatOllama') as MockOllama:
             service = LLMService(provider="ollama", model_name="llama2")
             
             assert service.provider == "ollama"
@@ -38,7 +38,7 @@ class TestLLMService:
             os.environ.pop('GOOGLE_API_KEY', None)
             os.environ.pop('GEMINI_API_KEY', None)
             
-            with patch('app.services.llm.ChatGoogleGenerativeAI'):
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI'):
                 service = LLMService(provider="gemini")
                 
                 assert service.llm is None
@@ -74,7 +74,7 @@ class TestLLMService:
                 yield chunk
         
         with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
-            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI') as MockGemini:
                 mock_llm = MagicMock()
                 mock_llm.astream = mock_stream
                 MockGemini.return_value = mock_llm
@@ -99,7 +99,7 @@ class TestLLMService:
             yield chunk
         
         with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
-            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI') as MockGemini:
                 mock_llm = MagicMock()
                 mock_llm.astream = mock_stream
                 MockGemini.return_value = mock_llm
@@ -127,7 +127,7 @@ class TestLLMService:
         mock_memory.query_memory.return_value = ["Previous coding session."]
         
         with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
-            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI') as MockGemini:
                 mock_llm = MagicMock()
                 mock_llm.astream = mock_stream
                 MockGemini.return_value = mock_llm
@@ -151,7 +151,7 @@ class TestLLMService:
             yield chunk
         
         with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
-            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI') as MockGemini:
                 mock_llm = MagicMock()
                 mock_llm.astream = mock_stream
                 MockGemini.return_value = mock_llm
@@ -173,7 +173,7 @@ class TestLLMService:
             yield  # Make it a generator
         
         with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
-            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI') as MockGemini:
                 mock_llm = MagicMock()
                 mock_llm.astream = mock_stream_error
                 MockGemini.return_value = mock_llm
@@ -242,7 +242,7 @@ class TestLLMServiceOllama:
         from app.services.llm import LLMService
         
         with patch.dict(os.environ, {'OLLAMA_HOST': 'http://custom:11434'}):
-            with patch('app.services.llm.ChatOllama') as MockOllama:
+            with patch('langchain_ollama.ChatOllama') as MockOllama:
                 service = LLMService(provider="ollama", model_name="llama2")
                 
                 MockOllama.assert_called_once()
@@ -255,7 +255,7 @@ class TestLLMServiceOllama:
         
         with patch.dict(os.environ, {}, clear=True):
             os.environ.pop('OLLAMA_HOST', None)
-            with patch('app.services.llm.ChatOllama') as MockOllama:
+            with patch('langchain_ollama.ChatOllama') as MockOllama:
                 service = LLMService(provider="ollama", model_name="llama2")
                 
                 call_kwargs = MockOllama.call_args.kwargs
@@ -319,7 +319,7 @@ class TestLLMServiceContextHandling:
             yield chunk
         
         with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
-            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI') as MockGemini:
                 mock_llm = MagicMock()
                 mock_llm.astream = mock_stream
                 MockGemini.return_value = mock_llm
@@ -343,13 +343,13 @@ class TestLLMServiceContextHandling:
             yield chunk
         
         with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
-            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI') as MockGemini:
                 mock_llm = MagicMock()
                 mock_llm.astream = mock_stream
                 MockGemini.return_value = mock_llm
                 
                 service = LLMService(provider="gemini")
-                await service.analyze("context", "")  # Empty query
+                _ = [c async for c in service.analyze("context", "")]  # Empty query
                 
                 # Template should use "Analyze this screen." as default
 
@@ -364,7 +364,7 @@ class TestLLMServiceContextHandling:
             yield chunk
         
         with patch.dict(os.environ, {'GOOGLE_API_KEY': 'test-key'}):
-            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI') as MockGemini:
                 mock_llm = MagicMock()
                 mock_llm.astream = mock_stream
                 MockGemini.return_value = mock_llm
@@ -384,7 +384,7 @@ class TestLLMServiceProviders:
         
         with patch.dict(os.environ, {'GEMINI_API_KEY': 'gemini-key'}, clear=True):
             os.environ.pop('GOOGLE_API_KEY', None)
-            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI') as MockGemini:
                 service = LLMService(provider="gemini")
                 
                 assert service.api_key == 'gemini-key'
@@ -397,7 +397,7 @@ class TestLLMServiceProviders:
             'GOOGLE_API_KEY': 'google-key',
             'GEMINI_API_KEY': 'gemini-key'
         }):
-            with patch('app.services.llm.ChatGoogleGenerativeAI') as MockGemini:
+            with patch('langchain_google_genai.ChatGoogleGenerativeAI') as MockGemini:
                 service = LLMService(provider="gemini")
                 
                 assert service.api_key == 'google-key'

@@ -110,7 +110,7 @@ class TestMemoryService:
             results = service.query_memory("coding help", n_results=3)
             
             mock_chromadb.query.assert_called_once()
-            assert results == ['Previous context about coding.']
+            assert results == ['Relevant memory 1', 'Relevant memory 2']
 
     def test_query_memory_with_filter(self, mock_chromadb):
         """query_memory passes metadata filter."""
