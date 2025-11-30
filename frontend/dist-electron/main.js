@@ -49,8 +49,9 @@ function createWindow() {
         x: width - 420,
         y: 20,
         webPreferences: {
-            nodeIntegration: true,
-            contextIsolation: false, // Note: For production, use preload scripts and contextIsolation: true
+            nodeIntegration: false,
+            contextIsolation: true,
+            preload: path.join(__dirname, 'preload.js')
         },
         frame: false,
         transparent: true,
