@@ -35,14 +35,14 @@ class LLMService:
                 memory_context = "\nRelevant Past Context:\n" + "\n".join([f"- {m}" for m in memories])
 
         prompt = f"""
-        Context from screen (OCR):
-        {context_text[:2000] if context_text else "No text detected via OCR."} 
+        Context from screen (OCR) with bounding boxes [x1, y1, x2, y2]:
+        {context_text[:5000] if context_text else "No text detected via OCR."} 
         
         {memory_context}
         
         User Query: {user_query if user_query else "Analyze this screen."}
         
-        Please provide a concise, helpful response.
+        Please provide a concise, helpful response. Use the spatial coordinates to understand the layout.
         """
 
         if self.provider == "gemini":

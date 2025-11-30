@@ -16,10 +16,18 @@ class OCRService:
             self.engine = None
 
     def extract_text(self, image: Image.Image) -> str:
-        if not self.engine: return ""
+        if not self.engine or not image: return ""
         try:
             result, _ = self.engine(np.array(image))
-            return "\n".join(r[1] for r in result if r[1]).strip() if result else ""
+            if not result: return ""
+            
+            lines = []
+            for r in result:
+                if not r[1]: continue
+                xs, ys = [p[0] for p in r[0]], [p[1] for p in r[0]]
+                lines.append(f"[{int(min(xs))}, {int(min(ys))}, {int(max(xs))}, {int(max(ys))}] {r[1]}")
+            
+            return "\n".join(lines)
         except Exception as e:
             logger.error(f"OCR Error: {e}")
             return ""
