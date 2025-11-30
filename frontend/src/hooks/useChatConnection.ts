@@ -197,6 +197,19 @@ export const useChatConnection = () => {
 
   // Connect/disconnect based on mic state
   useEffect(() => {
+    const toggleRecording = async () => {
+      try {
+        const apiUrl = WS_URL.replace('ws://', 'http://').replace('/ws', '');
+        await fetch(`${apiUrl}/api/recording/${micEnabled ? 'start' : 'stop'}`, {
+          method: 'POST',
+        });
+      } catch (e) {
+        console.error('Failed to toggle recording:', e);
+      }
+    };
+
+    void toggleRecording();
+
     if (micEnabled) {
       connect();
     } else {

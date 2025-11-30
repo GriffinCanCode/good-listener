@@ -238,7 +238,13 @@ func (m *Manager) audioLoop(ctx context.Context) {
 		case <-m.stopCh:
 			return
 		case chunk := <-m.audioCap.Output():
-			m.audioProc.ProcessChunk(ctx, chunk)
+			m.mu.RLock()
+			isRecording := m.recording
+			m.mu.RUnlock()
+
+			if isRecording {
+				m.audioProc.ProcessChunk(ctx, chunk)
+			}
 		}
 	}
 }
