@@ -1,165 +1,68 @@
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Stoplight } from './components/Stoplight';
 import { Sidebar } from './components/Sidebar';
 import ReactMarkdown from 'react-markdown';
 import { Menu, Send, Camera, Sparkles } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { useChatStore } from './store/useChatStore';
+import { useUIStore } from './store/useUIStore';
+import { useChatConnection } from './hooks/useChatConnection';
 
 const API_BASE = 'http://127.0.0.1:8000';
-const WS_URL = 'ws://127.0.0.1:8000/ws';
-const ELECTRON = (window as any).require?.('electron');
-
-interface Message { role: 'user' | 'assistant'; content: string; }
-interface Session { id: string; title: string; date: string; messages: Message[]; }
 
 const App: React.FC = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [sessions, setSessions] = useState<Session[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [stream, setStream] = useState('');
-  const [status, setStatus] = useState<'connected' | 'disconnected'>('disconnected');
   const [input, setInput] = useState('');
-  const ws = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  
+  const { 
+    sessions, 
+    stream, 
+    status, 
+    createSession, 
+    getCurrentSession 
+  } = useChatStore();
+  
+  const { isSidebarOpen, toggleSidebar } = useUIStore();
+  const { sendMessage } = useChatConnection();
+  
+  const currentSession = getCurrentSession();
+  const messages = currentSession?.messages || [];
 
-  // Load sessions on mount
+  // Ensure a session exists on mount
   useEffect(() => {
-    const saved = localStorage.getItem('chat_sessions');
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      setSessions(parsed);
-      if (parsed.length > 0) {
-        setCurrentSessionId(parsed[0].id);
-        setMessages(parsed[0].messages);
-      }
-    } else {
-      createNewSession();
+    if (sessions.length === 0) {
+      createSession();
     }
-  }, []);
+  }, [sessions.length, createSession]);
 
-  // Save sessions when updated
+  // Scroll to bottom on messages/stream change
   useEffect(() => {
-    if (sessions.length > 0) {
-      localStorage.setItem('chat_sessions', JSON.stringify(sessions));
-    }
-  }, [sessions]);
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages.length, stream]);
 
-  // Update current session messages
+  // Electron listeners
   useEffect(() => {
-    if (!currentSessionId) return;
-    setSessions(prev => prev.map(s => 
-      s.id === currentSessionId 
-        ? { ...s, messages: [...messages, ...(stream ? [{ role: 'assistant', content: stream } as Message] : [])] }
-        : s
-    ));
-  }, [messages, stream, currentSessionId]);
-
-  const createNewSession = () => {
-    const newSession: Session = {
-      id: Date.now().toString(),
-      title: 'New Chat',
-      date: new Date().toISOString(),
-      messages: []
-    };
-    setSessions(prev => [newSession, ...prev]);
-    setCurrentSessionId(newSession.id);
-    setMessages([]);
-    setStream('');
-    if (window.innerWidth < 768) setSidebarOpen(false);
-  };
-
-  const deleteSession = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    const newSessions = sessions.filter(s => s.id !== id);
-    setSessions(newSessions);
-    if (currentSessionId === id) {
-      if (newSessions.length > 0) {
-        setCurrentSessionId(newSessions[0].id);
-        setMessages(newSessions[0].messages);
-      } else {
-        createNewSession();
-      }
-    }
-  };
-
-  const selectSession = (id: string) => {
-    const session = sessions.find(s => s.id === id);
-    if (session) {
-      setCurrentSessionId(id);
-      setMessages(session.messages);
-      setStream('');
-      if (window.innerWidth < 768) setSidebarOpen(false);
-    }
-  };
-
-  const connect = useCallback(() => {
-    if (ws.current?.readyState === WebSocket.OPEN) return;
-    ws.current = new WebSocket(WS_URL);
-    ws.current.onopen = () => setStatus('connected');
-    ws.current.onclose = () => { setStatus('disconnected'); setTimeout(connect, 3000); };
-    
-    ws.current.onmessage = (e) => {
-      try {
-        const data = JSON.parse(e.data);
-        switch (data.type) {
-          case 'start': setStream(''); break;
-          case 'chunk': setStream(p => p + data.content); break;
-          case 'done':
-            setStream(finalStream => {
-              setMessages(prev => [...prev, { role: 'assistant', content: finalStream }]);
-              return '';
-            });
-            break;
-          case 'insight':
-            setMessages(prev => [...prev, { role: 'assistant', content: data.content }]);
-            break;
-        }
-      } catch {}
+    const onWindowShown = () => console.log('Window shown');
+    window.electronAPI?.onWindowShown(onWindowShown);
+    return () => {
+      window.electronAPI?.removeAllWindowShownListeners();
     };
   }, []);
 
-  useEffect(() => {
-    connect();
-    ELECTRON?.ipcRenderer.on('window-shown', () => console.log('Window shown'));
-    return () => { ws.current?.close(); ELECTRON?.ipcRenderer.removeAllListeners('window-shown'); };
-  }, [connect]);
-
-  useEffect(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages, stream]);
-
-  const send = () => {
+  const handleSend = () => {
     if (!input.trim() || status !== 'connected') return;
-    const userMsg: Message = { role: 'user', content: input };
-    setMessages(p => [...p, userMsg]);
-    ws.current?.send(JSON.stringify({ type: 'chat', message: input }));
+    sendMessage(input);
     setInput('');
-    
-    // Update session title if it's the first message
-    if (messages.length === 0 && currentSessionId) {
-      setSessions(prev => prev.map(s => 
-        s.id === currentSessionId 
-          ? { ...s, title: input.slice(0, 30) + (input.length > 30 ? '...' : '') }
-          : s
-      ));
-    }
   };
 
   return (
     <div className="app-container">
-      <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        sessions={sessions.map(s => ({ id: s.id, title: s.title, date: s.date }))}
-        currentSessionId={currentSessionId}
-        onSelectSession={selectSession}
-        onNewSession={createNewSession}
-        onDeleteSession={deleteSession}
-      />
+      <Sidebar />
 
-      <div className={`main-content ${sidebarOpen ? 'pushed' : ''}`}>
+      <div className={`main-content ${isSidebarOpen ? 'pushed' : ''}`}>
         <div className="header draggable">
           <div className="header-left">
-             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="icon-btn menu-btn no-drag">
+             <button onClick={toggleSidebar} className="icon-btn menu-btn no-drag">
               <Menu size={20} />
             </button>
             <Stoplight />
@@ -222,11 +125,11 @@ const App: React.FC = () => {
             <textarea 
               value={input} 
               onChange={e => setInput(e.target.value)} 
-              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), send())}
+              onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
               placeholder="Type a message..."
               rows={1}
             />
-            <button onClick={send} disabled={!input.trim() || status !== 'connected'} className="send-btn">
+            <button onClick={handleSend} disabled={!input.trim() || status !== 'connected'} className="send-btn">
               <Send size={18} />
             </button>
           </div>
