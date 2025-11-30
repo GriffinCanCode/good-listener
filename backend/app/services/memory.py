@@ -29,36 +29,39 @@ class MemoryService:
             os.makedirs(self.persistence_path, exist_ok=True)
 
     def add_memory(self, text: str, source: str, metadata: Optional[Dict] = None):
-        """
-        Add a text chunk to the vector store.
-        
-        Args:
-            text: The text content to embed and store.
-            source: 'audio', 'screen', or 'user_query'.
-            metadata: Additional metadata (timestamp, window_title, etc.).
-        """
+        """Add text to vector store and prune if needed."""
         if not self.collection or not text.strip():
             return
 
-        if metadata is None:
-            metadata = {}
-        
-        # Ensure basic metadata
-        metadata["source"] = source
-        metadata["timestamp"] = metadata.get("timestamp", time.time())
+        metadata = metadata or {}
+        metadata.update({"source": source, "timestamp": metadata.get("timestamp", time.time())})
         
         try:
-            # ChromaDB requires unique IDs. We'll generate one based on time and hash.
             doc_id = f"{source}_{int(time.time()*1000)}"
-            
-            self.collection.add(
-                documents=[text],
-                metadatas=[metadata],
-                ids=[doc_id]
-            )
+            self.collection.add(documents=[text], metadatas=[metadata], ids=[doc_id])
             logger.debug(f"Added memory: {doc_id}")
+            
+            if self.collection.count() > 10000:
+                self._prune_oldest()
         except Exception as e:
             logger.error(f"Error adding memory: {e}")
+
+    def _prune_oldest(self, keep=5000):
+        """Keep only the most recent memories."""
+        try:
+            ids = self.collection.get(include=[])['ids']
+            if len(ids) > keep:
+                # IDs are timestamp-prefixed, so sorting works roughly (or we parse them)
+                # Actually our IDs are {source}_{timestamp}, so string sort might fail for diff sources/lengths
+                # Better to rely on metadata if possible, but get() with where is slower.
+                # Let's parse the timestamp from the ID for reliable sorting.
+                sorted_ids = sorted(ids, key=lambda x: int(x.split('_')[-1]) if '_' in x else 0)
+                to_delete = sorted_ids[:len(ids) - keep]
+                self.collection.delete(ids=to_delete)
+                logger.info(f"Pruned {len(to_delete)} old memories")
+        except Exception as e:
+            logger.error(f"Pruning failed: {e}")
+
 
     def query_memory(self, query_text: str, n_results: int = 5, filter_metadata: Optional[Dict] = None) -> List[str]:
         """
