@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gordonklaus/portaudio"
@@ -28,6 +29,9 @@ type Capturer struct {
 	running      bool
 	systemAudio  bool
 	excludedDevs []string
+	// Metrics for dropped chunks
+	droppedChunks atomic.Int64
+	lastDropLog   atomic.Int64 // Unix nano timestamp of last drop warning
 }
 
 type deviceCapture struct {
@@ -53,6 +57,9 @@ func NewCapturer(sampleRate, bufferSize int, captureSystemAudio bool, excludedDe
 
 // Output returns the channel for receiving audio chunks.
 func (c *Capturer) Output() <-chan Chunk { return c.outCh }
+
+// DroppedChunks returns the total number of dropped audio chunks.
+func (c *Capturer) DroppedChunks() int64 { return c.droppedChunks.Load() }
 
 // Start begins capturing audio from available devices.
 func (c *Capturer) Start(ctx context.Context) error {
@@ -211,7 +218,14 @@ func (c *Capturer) startDevice(ctx context.Context, dev *portaudio.DeviceInfo, s
 			select {
 			case c.outCh <- chunk:
 			default:
-				slog.Debug("audio buffer full, dropping chunk", "device", deviceID)
+				dropped := c.droppedChunks.Add(1)
+				// Rate-limit warnings to once per second
+				now := time.Now().UnixNano()
+				if last := c.lastDropLog.Load(); now-last > int64(time.Second) {
+					if c.lastDropLog.CompareAndSwap(last, now) {
+						slog.Warn("audio buffer full, dropping chunks", "device", deviceID, "total_dropped", dropped)
+					}
+				}
 			}
 		}
 	}()
