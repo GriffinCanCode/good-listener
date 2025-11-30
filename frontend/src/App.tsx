@@ -170,10 +170,7 @@ const WelcomeHero: React.FC = () => {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const TranscriptPanel: React.FC = () => (
-  <div
-    className="live-transcript-wrapper"
-    style={{ position: 'relative', width: 320, flexShrink: 0 }}
-  >
+  <div className="live-transcript-wrapper">
     <div className="transcript-header">
       <h3>Live Transcript</h3>
     </div>

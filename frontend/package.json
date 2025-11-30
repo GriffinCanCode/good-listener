@@ -21,7 +21,7 @@
     "package:linux": "electron-vite build && electron-builder --linux"
   },
   "dependencies": {
-    "framer-motion": "^12.23.24",
+    "gsap": "^3.13.0",
     "lucide-react": "^0.555.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
