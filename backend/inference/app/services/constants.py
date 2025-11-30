@@ -24,6 +24,10 @@ VAD_DEFAULT_SAMPLE_RATE = 16000
 # Transcription Constants
 WHISPER_BEAM_SIZE = 1
 
+# Diarization Constants
+DIARIZATION_MODEL = "pyannote/speaker-diarization-3.1"
+DIARIZATION_MIN_SPEAKERS = 1
+
 # Question Detection Constants
 MIN_QUESTION_LENGTH = 10
 
@@ -34,4 +38,7 @@ GRPC_DEFAULT_PORT = 50051
 
 # Audio Processing
 SAMPLES_PER_SECOND = 16000  # 16kHz standard
+
+# Summarization
+SUMMARY_MIN_INPUT_LENGTH = 200  # Minimum transcript length to summarize
 

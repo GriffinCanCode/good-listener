@@ -408,3 +408,94 @@ class TestLLMServiceProviders:
                 service = LLMService(provider="gemini")
 
                 assert service.api_key == "google-key"
+
+
+class TestLLMServiceSummarization:
+    """Tests for transcript summarization."""
+
+    @pytest.mark.asyncio
+    async def test_summarize_no_llm(self):
+        """summarize returns original when LLM not configured."""
+        from app.services.llm import LLMService
+
+        service = LLMService(provider="unknown")
+        result = await service.summarize("USER: Hello\nSYSTEM: Hi there")
+
+        assert result == "USER: Hello\nSYSTEM: Hi there"
+
+    @pytest.mark.asyncio
+    async def test_summarize_empty_transcript(self):
+        """summarize returns empty for empty input."""
+        from app.services.llm import LLMService
+
+        service = LLMService(provider="unknown")
+        result = await service.summarize("")
+
+        assert result == ""
+
+    @pytest.mark.asyncio
+    async def test_summarize_success(self):
+        """summarize compresses transcript text."""
+        from app.services.llm import LLMService
+
+        async def mock_stream(*args, **kwargs):
+            for text in ["Discussion about ", "Python programming."]:
+                chunk = MagicMock()
+                chunk.content = text
+                yield chunk
+
+        with patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"}):
+            with patch("langchain_google_genai.ChatGoogleGenerativeAI") as MockGemini:
+                mock_llm = MagicMock()
+                mock_llm.astream = mock_stream
+                MockGemini.return_value = mock_llm
+
+                service = LLMService(provider="gemini")
+                result = await service.summarize("USER: Tell me about Python\nSYSTEM: Python is a programming language...")
+
+                assert result == "Discussion about Python programming."
+
+    @pytest.mark.asyncio
+    async def test_summarize_handles_error(self):
+        """summarize returns original on error."""
+        from app.services.llm import LLMService
+
+        async def mock_stream_error(*args, **kwargs):
+            raise Exception("API Error")
+            yield  # Make it a generator
+
+        with patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"}):
+            with patch("langchain_google_genai.ChatGoogleGenerativeAI") as MockGemini:
+                mock_llm = MagicMock()
+                mock_llm.astream = mock_stream_error
+                MockGemini.return_value = mock_llm
+
+                service = LLMService(provider="gemini")
+                original = "USER: Hello\nSYSTEM: Hi"
+                result = await service.summarize(original)
+
+                assert result == original  # Falls back to original
+
+    @pytest.mark.asyncio
+    async def test_summarize_with_max_length(self):
+        """summarize respects max_length parameter."""
+        from app.services.llm import LLMService
+
+        captured_messages = []
+
+        async def mock_stream(messages):
+            captured_messages.extend(messages)
+            chunk = MagicMock()
+            chunk.content = "Short summary"
+            yield chunk
+
+        with patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"}):
+            with patch("langchain_google_genai.ChatGoogleGenerativeAI") as MockGemini:
+                mock_llm = MagicMock()
+                mock_llm.astream = mock_stream
+                MockGemini.return_value = mock_llm
+
+                service = LLMService(provider="gemini")
+                result = await service.summarize("x" * 1000, max_length=100)
+
+                assert result == "Short summary"

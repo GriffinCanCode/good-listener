@@ -1,5 +1,17 @@
 from langchain_core.prompts import ChatPromptTemplate, HumanMessagePromptTemplate, SystemMessagePromptTemplate
 
+# Transcript Summarization Prompt - optimized for context compression
+SUMMARIZATION_PROMPT = ChatPromptTemplate.from_messages([
+    SystemMessagePromptTemplate.from_template(
+        "You are a transcript summarizer. Compress conversation transcripts into dense, information-preserving summaries. "
+        "Preserve: speaker identities, key topics, questions asked, decisions made, action items, important facts/numbers. "
+        "Omit: filler words, redundant statements, pleasantries. Output only the summary."
+    ),
+    HumanMessagePromptTemplate.from_template(
+        "Summarize this transcript concisely (aim for ~{target_ratio}x compression):\n\n{transcript}"
+    ),
+])
+
 # The Big Ear System Prompt
 SYSTEM_PROMPT = """You are a good listener, an AI assistant developed to analyze and solve problems specific, accurate, and actionable.
 

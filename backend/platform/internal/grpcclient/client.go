@@ -153,6 +153,32 @@ func (c *Client) CheckHealth(ctx context.Context) (bool, error) {
 	return true, nil
 }
 
+// WaitReady blocks until the inference server is available or timeout.
+func (c *Client) WaitReady(ctx context.Context, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(StartupPollInterval)
+	defer ticker.Stop()
+
+	slog.Info("waiting for inference server", "timeout", timeout)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			checkCtx, checkCancel := context.WithTimeout(ctx, HealthCheckTimeout)
+			resp, err := c.Health.Check(checkCtx, &grpc_health_v1.HealthCheckRequest{})
+			checkCancel()
+			if err == nil && resp.Status == grpc_health_v1.HealthCheckResponse_SERVING {
+				slog.Info("inference server ready")
+				c.cb.Reset() // Clear any startup failures
+				return nil
+			}
+		}
+	}
+}
+
 // IsConnected returns true if connection is ready.
 func (c *Client) IsConnected() bool {
 	return c.conn.GetState() == connectivity.Ready
@@ -216,6 +242,25 @@ func (c *Client) Transcribe(ctx context.Context, audio []byte, sampleRate int32)
 			return err
 		}
 		result = resp.Text
+		return nil
+	})
+	return result, err
+}
+
+// Diarize identifies speakers in audio with timestamps.
+func (c *Client) Diarize(ctx context.Context, audio []byte, sampleRate, minSpeakers, maxSpeakers int32) ([]*pb.SpeakerSegment, error) {
+	var result []*pb.SpeakerSegment
+	err := c.withBreaker(func() error {
+		resp, err := c.Transcription.Diarize(ctx, &pb.DiarizeRequest{
+			AudioData:   audio,
+			SampleRate:  sampleRate,
+			MinSpeakers: minSpeakers,
+			MaxSpeakers: maxSpeakers,
+		})
+		if err != nil {
+			return err
+		}
+		result = resp.Segments
 		return nil
 	})
 	return result, err
@@ -367,6 +412,23 @@ func (c *Client) QueryMemory(ctx context.Context, query string, n int32) ([]stri
 			return err
 		}
 		result = resp.Documents
+		return nil
+	})
+	return result, err
+}
+
+// SummarizeTranscript compresses transcript text via LLM summarization.
+func (c *Client) SummarizeTranscript(ctx context.Context, transcript string, maxLength int32) (string, error) {
+	var result string
+	err := c.withBreaker(func() error {
+		resp, err := c.LLM.SummarizeTranscript(ctx, &pb.SummarizeRequest{
+			Transcript: transcript,
+			MaxLength:  maxLength,
+		})
+		if err != nil {
+			return err
+		}
+		result = resp.Summary
 		return nil
 	})
 	return result, err

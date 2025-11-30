@@ -8,7 +8,7 @@ from PIL import Image
 
 from app.core import get_logger
 from app.services.constants import CONTEXT_TEXT_MAX_LENGTH, MEMORY_QUERY_RESULTS
-from app.services.llm.prompts import ANALYSIS_TEMPLATE
+from app.services.llm.prompts import ANALYSIS_TEMPLATE, SUMMARIZATION_PROMPT
 
 logger = get_logger(__name__)
 
@@ -65,3 +65,18 @@ class LLMService:
         buf = io.BytesIO()
         img.save(buf, format="JPEG")
         return base64.b64encode(buf.getvalue()).decode()
+
+    async def summarize(self, transcript: str, max_length: int = 0) -> str:
+        """Summarize transcript for context compression."""
+        if not self.llm or not transcript.strip():
+            return transcript
+        target_ratio = 3 if max_length <= 0 else max(2, len(transcript) // max(max_length, 100))
+        msgs = SUMMARIZATION_PROMPT.invoke({"transcript": transcript, "target_ratio": target_ratio}).to_messages()
+        try:
+            result = []
+            async for chunk in self.llm.astream(msgs):
+                result.append(chunk.content)
+            return "".join(result).strip()
+        except Exception as e:
+            logger.exception("Summarization error")
+            return transcript  # Fallback to original on error

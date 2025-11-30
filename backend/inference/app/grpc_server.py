@@ -226,13 +226,13 @@ class MemoryServicer(pb_grpc.MemoryServiceServicer):
         return pb.ClearResponse(deleted_count=0)
 
 
-def _timed_load(name: str, loader):
+def _timed_load(service_name: str, loader):
     """Load a model/service and log duration."""
     import time
     start = time.perf_counter()
     result = loader()
     elapsed_ms = (time.perf_counter() - start) * 1000
-    logger.info("model_loaded", name=name, duration_ms=round(elapsed_ms, 1))
+    logger.info("model_loaded", service=service_name, duration_ms=round(elapsed_ms, 1))
     return result
 
 

@@ -197,6 +197,7 @@ func (m *Manager) Start(ctx context.Context) error {
 
 	go m.screenProc.Run(ctx, m.cfg.ScreenCaptureRate, m.stopCh)
 	go m.vadCleanupLoop(ctx)
+	go m.summarizationLoop(ctx)
 
 	return nil
 }
@@ -230,6 +231,64 @@ func (m *Manager) vadCleanupLoop(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (m *Manager) summarizationLoop(ctx context.Context) {
+	ticker := time.NewTicker(SummarizationInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-m.stopCh:
+			return
+		case <-ticker.C:
+			m.summarizeOldTranscripts(ctx)
+		}
+	}
+}
+
+func (m *Manager) summarizeOldTranscripts(ctx context.Context) {
+	// Skip if not recording (no new context needed)
+	m.mu.RLock()
+	recording := m.recording
+	m.mu.RUnlock()
+	if !recording {
+		return
+	}
+
+	entries, start, end := m.transcripts.GetUnsummarized(SummarizationThreshold)
+	if len(entries) < SummarizationMinEntries {
+		return
+	}
+
+	// Build transcript text from entries
+	var parts []string
+	for _, e := range entries {
+		parts = append(parts, strings.ToUpper(e.Source)+": "+e.Text)
+	}
+	text := strings.Join(parts, "\n")
+
+	ctx, span := trace.StartSpan(ctx, "summarize_transcript")
+	defer span.End()
+	span.SetAttr("entries", len(entries))
+	span.SetAttr("text_len", len(text))
+
+	// Add timeout to prevent blocking
+	ctx, cancel := context.WithTimeout(ctx, SummarizationTimeout)
+	defer cancel()
+
+	summary, err := m.inference.SummarizeTranscript(ctx, text, SummarizationMaxLength)
+	if err != nil {
+		span.SetAttr("error", err.Error())
+		trace.Logger(ctx).Warn("summarization failed", "error", err)
+		return
+	}
+
+	m.transcripts.StoreSummary(start, end, summary)
+	span.SetAttr("summary_len", len(summary))
+	trace.Logger(ctx).Info("transcript summarized", "entries", len(entries), "original_len", len(text), "summary_len", len(summary))
 }
 
 // Stop stops orchestration.

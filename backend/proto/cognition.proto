@@ -14,6 +14,9 @@ service TranscriptionService {
     
     // Stream audio chunks for real-time transcription
     rpc StreamTranscribe(stream AudioChunk) returns (stream TranscriptSegment);
+    
+    // Diarize audio to identify speakers with timestamps
+    rpc Diarize(DiarizeRequest) returns (DiarizeResponse);
 }
 
 message TranscribeRequest {
@@ -40,6 +43,23 @@ message TranscriptSegment {
     int64 start_ns = 3;
     int64 end_ns = 4;
     bool is_final = 5;
+}
+
+message DiarizeRequest {
+    bytes audio_data = 1;      // PCM float32 audio at 16kHz
+    int32 sample_rate = 2;     // Sample rate (default 16000)
+    int32 min_speakers = 3;    // Minimum expected speakers
+    int32 max_speakers = 4;    // Maximum expected speakers (0 for auto)
+}
+
+message DiarizeResponse {
+    repeated SpeakerSegment segments = 1;
+}
+
+message SpeakerSegment {
+    string speaker = 1;        // Speaker label (e.g., "SPEAKER_00")
+    double start_sec = 2;      // Start time in seconds
+    double end_sec = 3;        // End time in seconds
 }
 
 // ============================================================================
@@ -79,6 +99,20 @@ service LLMService {
     
     // Check if text is a question
     rpc IsQuestion(IsQuestionRequest) returns (IsQuestionResponse);
+    
+    // Summarize transcript for context compression
+    rpc SummarizeTranscript(SummarizeRequest) returns (SummarizeResponse);
+}
+
+message SummarizeRequest {
+    string transcript = 1;     // Raw transcript text to summarize
+    int32 max_length = 2;      // Target max length for summary (optional)
+}
+
+message SummarizeResponse {
+    string summary = 1;
+    int32 original_length = 2;
+    int32 summary_length = 3;
 }
 
 message AnalyzeRequest {

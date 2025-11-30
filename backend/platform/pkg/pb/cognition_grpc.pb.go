@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	TranscriptionService_Transcribe_FullMethodName       = "/cognition.TranscriptionService/Transcribe"
 	TranscriptionService_StreamTranscribe_FullMethodName = "/cognition.TranscriptionService/StreamTranscribe"
+	TranscriptionService_Diarize_FullMethodName          = "/cognition.TranscriptionService/Diarize"
 )
 
 // TranscriptionServiceClient is the client API for TranscriptionService service.
@@ -31,6 +32,8 @@ type TranscriptionServiceClient interface {
 	Transcribe(ctx context.Context, in *TranscribeRequest, opts ...grpc.CallOption) (*TranscribeResponse, error)
 	// Stream audio chunks for real-time transcription
 	StreamTranscribe(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AudioChunk, TranscriptSegment], error)
+	// Diarize audio to identify speakers with timestamps
+	Diarize(ctx context.Context, in *DiarizeRequest, opts ...grpc.CallOption) (*DiarizeResponse, error)
 }
 
 type transcriptionServiceClient struct {
@@ -64,6 +67,16 @@ func (c *transcriptionServiceClient) StreamTranscribe(ctx context.Context, opts 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type TranscriptionService_StreamTranscribeClient = grpc.BidiStreamingClient[AudioChunk, TranscriptSegment]
 
+func (c *transcriptionServiceClient) Diarize(ctx context.Context, in *DiarizeRequest, opts ...grpc.CallOption) (*DiarizeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DiarizeResponse)
+	err := c.cc.Invoke(ctx, TranscriptionService_Diarize_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TranscriptionServiceServer is the server API for TranscriptionService service.
 // All implementations must embed UnimplementedTranscriptionServiceServer
 // for forward compatibility.
@@ -72,6 +85,8 @@ type TranscriptionServiceServer interface {
 	Transcribe(context.Context, *TranscribeRequest) (*TranscribeResponse, error)
 	// Stream audio chunks for real-time transcription
 	StreamTranscribe(grpc.BidiStreamingServer[AudioChunk, TranscriptSegment]) error
+	// Diarize audio to identify speakers with timestamps
+	Diarize(context.Context, *DiarizeRequest) (*DiarizeResponse, error)
 	mustEmbedUnimplementedTranscriptionServiceServer()
 }
 
@@ -87,6 +102,9 @@ func (UnimplementedTranscriptionServiceServer) Transcribe(context.Context, *Tran
 }
 func (UnimplementedTranscriptionServiceServer) StreamTranscribe(grpc.BidiStreamingServer[AudioChunk, TranscriptSegment]) error {
 	return status.Error(codes.Unimplemented, "method StreamTranscribe not implemented")
+}
+func (UnimplementedTranscriptionServiceServer) Diarize(context.Context, *DiarizeRequest) (*DiarizeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Diarize not implemented")
 }
 func (UnimplementedTranscriptionServiceServer) mustEmbedUnimplementedTranscriptionServiceServer() {}
 func (UnimplementedTranscriptionServiceServer) testEmbeddedByValue()                              {}
@@ -134,6 +152,24 @@ func _TranscriptionService_StreamTranscribe_Handler(srv interface{}, stream grpc
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type TranscriptionService_StreamTranscribeServer = grpc.BidiStreamingServer[AudioChunk, TranscriptSegment]
 
+func _TranscriptionService_Diarize_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DiarizeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TranscriptionServiceServer).Diarize(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TranscriptionService_Diarize_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TranscriptionServiceServer).Diarize(ctx, req.(*DiarizeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TranscriptionService_ServiceDesc is the grpc.ServiceDesc for TranscriptionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -144,6 +180,10 @@ var TranscriptionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Transcribe",
 			Handler:    _TranscriptionService_Transcribe_Handler,
+		},
+		{
+			MethodName: "Diarize",
+			Handler:    _TranscriptionService_Diarize_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
@@ -260,8 +300,9 @@ var OCRService_ServiceDesc = grpc.ServiceDesc{
 }
 
 const (
-	LLMService_Analyze_FullMethodName    = "/cognition.LLMService/Analyze"
-	LLMService_IsQuestion_FullMethodName = "/cognition.LLMService/IsQuestion"
+	LLMService_Analyze_FullMethodName             = "/cognition.LLMService/Analyze"
+	LLMService_IsQuestion_FullMethodName          = "/cognition.LLMService/IsQuestion"
+	LLMService_SummarizeTranscript_FullMethodName = "/cognition.LLMService/SummarizeTranscript"
 )
 
 // LLMServiceClient is the client API for LLMService service.
@@ -272,6 +313,8 @@ type LLMServiceClient interface {
 	Analyze(ctx context.Context, in *AnalyzeRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[AnalyzeChunk], error)
 	// Check if text is a question
 	IsQuestion(ctx context.Context, in *IsQuestionRequest, opts ...grpc.CallOption) (*IsQuestionResponse, error)
+	// Summarize transcript for context compression
+	SummarizeTranscript(ctx context.Context, in *SummarizeRequest, opts ...grpc.CallOption) (*SummarizeResponse, error)
 }
 
 type lLMServiceClient struct {
@@ -311,6 +354,16 @@ func (c *lLMServiceClient) IsQuestion(ctx context.Context, in *IsQuestionRequest
 	return out, nil
 }
 
+func (c *lLMServiceClient) SummarizeTranscript(ctx context.Context, in *SummarizeRequest, opts ...grpc.CallOption) (*SummarizeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SummarizeResponse)
+	err := c.cc.Invoke(ctx, LLMService_SummarizeTranscript_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // LLMServiceServer is the server API for LLMService service.
 // All implementations must embed UnimplementedLLMServiceServer
 // for forward compatibility.
@@ -319,6 +372,8 @@ type LLMServiceServer interface {
 	Analyze(*AnalyzeRequest, grpc.ServerStreamingServer[AnalyzeChunk]) error
 	// Check if text is a question
 	IsQuestion(context.Context, *IsQuestionRequest) (*IsQuestionResponse, error)
+	// Summarize transcript for context compression
+	SummarizeTranscript(context.Context, *SummarizeRequest) (*SummarizeResponse, error)
 	mustEmbedUnimplementedLLMServiceServer()
 }
 
@@ -334,6 +389,9 @@ func (UnimplementedLLMServiceServer) Analyze(*AnalyzeRequest, grpc.ServerStreami
 }
 func (UnimplementedLLMServiceServer) IsQuestion(context.Context, *IsQuestionRequest) (*IsQuestionResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method IsQuestion not implemented")
+}
+func (UnimplementedLLMServiceServer) SummarizeTranscript(context.Context, *SummarizeRequest) (*SummarizeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SummarizeTranscript not implemented")
 }
 func (UnimplementedLLMServiceServer) mustEmbedUnimplementedLLMServiceServer() {}
 func (UnimplementedLLMServiceServer) testEmbeddedByValue()                    {}
@@ -385,6 +443,24 @@ func _LLMService_IsQuestion_Handler(srv interface{}, ctx context.Context, dec fu
 	return interceptor(ctx, in, info, handler)
 }
 
+func _LLMService_SummarizeTranscript_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SummarizeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(LLMServiceServer).SummarizeTranscript(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: LLMService_SummarizeTranscript_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(LLMServiceServer).SummarizeTranscript(ctx, req.(*SummarizeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // LLMService_ServiceDesc is the grpc.ServiceDesc for LLMService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -395,6 +471,10 @@ var LLMService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "IsQuestion",
 			Handler:    _LLMService_IsQuestion_Handler,
+		},
+		{
+			MethodName: "SummarizeTranscript",
+			Handler:    _LLMService_SummarizeTranscript_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
