@@ -4,10 +4,12 @@ import asyncio
 import io
 import os
 import re
+import signal
 from concurrent import futures
 
 import grpc
 import numpy as np
+from grpc_health.v1 import health_pb2_grpc
 from PIL import Image
 from dotenv import load_dotenv
 
@@ -19,6 +21,7 @@ from app.services.vad import VADService
 from app.services.ocr import OCRService
 from app.services.llm import LLMService
 from app.services.memory import MemoryService
+from app.services.health import create_health_servicer
 import app.pb.cognition_pb2 as pb
 import app.pb.cognition_pb2_grpc as pb_grpc
 
@@ -109,11 +112,11 @@ class OCRServicer(pb_grpc.OCRServiceServicer):
                     coords_end = line.index("]") + 1
                     coords = [int(x) for x in line[1:coords_end-1].split(", ")]
                     box_text = line[coords_end:].strip()
-                        boxes.append(pb.BoundingBox(x1=coords[0], y1=coords[1], x2=coords[2], y2=coords[3], text=box_text))
-                    except (ValueError, IndexError):
-                        pass
-            
-            return pb.OCRResponse(text=text, boxes=boxes)
+                    boxes.append(pb.BoundingBox(x1=coords[0], y1=coords[1], x2=coords[2], y2=coords[3], text=box_text))
+                except (ValueError, IndexError):
+                    pass
+        
+        return pb.OCRResponse(text=text, boxes=boxes)
 
 
 class LLMServicer(pb_grpc.LLMServiceServicer):
@@ -177,7 +180,7 @@ class MemoryServicer(pb_grpc.MemoryServiceServicer):
 
 
 async def serve(port: int = 50051):
-    """Start the gRPC server."""
+    """Start the gRPC server with graceful shutdown."""
     server = grpc.aio.server(
         futures.ThreadPoolExecutor(max_workers=10),
         interceptors=[TracingInterceptor()],
@@ -185,18 +188,50 @@ async def serve(port: int = 50051):
     
     memory_service = MemoryService()
     
-    pb_grpc.add_TranscriptionServiceServicer_to_server(TranscriptionServicer(), server)
-    pb_grpc.add_VADServiceServicer_to_server(VADServicer(), server)
-    pb_grpc.add_OCRServiceServicer_to_server(OCRServicer(), server)
-    pb_grpc.add_LLMServiceServicer_to_server(LLMServicer(memory_service), server)
-    pb_grpc.add_MemoryServiceServicer_to_server(MemoryServicer(memory_service), server)
+    # Create servicers
+    transcription_servicer = TranscriptionServicer()
+    vad_servicer = VADServicer()
+    ocr_servicer = OCRServicer()
+    llm_servicer = LLMServicer(memory_service)
+    memory_servicer = MemoryServicer(memory_service)
+    
+    # Register services
+    pb_grpc.add_TranscriptionServiceServicer_to_server(transcription_servicer, server)
+    pb_grpc.add_VADServiceServicer_to_server(vad_servicer, server)
+    pb_grpc.add_OCRServiceServicer_to_server(ocr_servicer, server)
+    pb_grpc.add_LLMServiceServicer_to_server(llm_servicer, server)
+    pb_grpc.add_MemoryServiceServicer_to_server(memory_servicer, server)
+    
+    # Register health check service with model availability checks
+    health_servicer = create_health_servicer(
+        transcription_svc=transcription_servicer.service,
+        vad_svc=vad_servicer.service,
+        ocr_svc=ocr_servicer.service,
+        llm_svc=llm_servicer.service,
+    )
+    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
     
     addr = f"[::]:{port}"
     server.add_insecure_port(addr)
     
-    logger.info(f"Inference gRPC server starting on {addr}")
+    # Graceful shutdown handler
+    shutdown_event = asyncio.Event()
+    
+    def handle_shutdown(signum, frame):
+        sig_name = signal.Signals(signum).name
+        logger.info("shutdown_signal_received", signal=sig_name)
+        shutdown_event.set()
+    
+    signal.signal(signal.SIGTERM, handle_shutdown)
+    signal.signal(signal.SIGINT, handle_shutdown)
+    
+    logger.info("grpc_server_starting", addr=addr)
     await server.start()
-    await server.wait_for_termination()
+    
+    await shutdown_event.wait()
+    logger.info("graceful_shutdown_initiated", grace_period=10)
+    await server.stop(grace=10)
+    logger.info("grpc_server_stopped")
 
 
 def main():
