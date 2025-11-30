@@ -15,7 +15,6 @@ import { MicButton } from './components/MicButton';
 import { Presence } from './components/Presence';
 import { Sidebar } from './components/Sidebar';
 import { Stoplight } from './components/Stoplight';
-import { VoiceActivityIndicator } from './components/VoiceActivityIndicator';
 import { useAutoScroll } from './hooks/useAutoScroll';
 import { useChatConnection } from './hooks/useChatConnection';
 import { duration, ease, fadeIn, scaleIn } from './lib/animations';
@@ -116,19 +115,6 @@ const WelcomeHero: React.FC = () => {
   );
 };
 
-const TranscriptPanel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  (props, ref) => (
-    <div ref={ref} className="live-transcript-wrapper" {...props}>
-      <div className="transcript-header">
-        <h3>Live Transcript</h3>
-      </div>
-      <VoiceActivityIndicator />
-      <LiveTranscript />
-    </div>
-  )
-);
-TranscriptPanel.displayName = 'TranscriptPanel';
-
 const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [showTranscript, setShowTranscript] = useState(false);
@@ -220,7 +206,7 @@ const App: React.FC = () => {
           </div>
 
           <Presence animation="slideLeft">
-            {showTranscript && <TranscriptPanel key="transcript" />}
+            {showTranscript && <LiveTranscript key="transcript" />}
           </Presence>
         </div>
 
