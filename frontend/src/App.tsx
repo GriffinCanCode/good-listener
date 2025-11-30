@@ -9,8 +9,9 @@ interface Message { role: 'user' | 'assistant'; content: string; }
 
 const App: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
+  const [stream, setStream] = useState('');
   const [status, setStatus] = useState<'connected' | 'disconnected'>('disconnected');
+  const [input, setInput] = useState('');
   const ws = useRef<WebSocket | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -24,38 +25,56 @@ const App: React.FC = () => {
         const data = JSON.parse(e.data);
         switch (data.type) {
           case 'start':
-            setMessages(p => [...p, { role: 'assistant', content: '' }]);
+            setStream('');
             break;
           case 'chunk':
-            setMessages(p => {
-              const newMsgs = [...p];
-              const last = newMsgs[newMsgs.length - 1];
-              if (last?.role === 'assistant') {
-                newMsgs[newMsgs.length - 1] = { ...last, content: last.content + data.content };
-                return newMsgs;
-              }
-              return [...p, { role: 'assistant', content: data.content }];
-            });
+            setStream(p => p + data.content);
+            break;
+          case 'done':
+            setMessages(p => [...p, { role: 'assistant', content: stream }]); // Note: this might be stale due to closure
+            setStream('');
             break;
           case 'insight':
             setMessages(p => [...p, { role: 'assistant', content: data.content }]);
             break;
-          default:
-            break;
         }
-      } catch {
-        setMessages(p => [...p, { role: 'assistant', content: e.data }]);
-      }
+      } catch { /* Ignore non-JSON */ }
     };
-  }, []);
+  }, [stream]); // 'stream' dep is problematic for closure, but we handle below.
+
+  // Fix for 'done' closure issue: rely on state updater with a fresh ref or simply
+  // don't clear stream until we push it.
+  // Actually, cleaner approach:
+  // Just rely on `stream` state for the LAST message if it's active.
+
+  // Better implementation of onmessage avoiding stale closures:
+  useEffect(() => {
+    if (!ws.current) return;
+    ws.current.onmessage = (e) => {
+      try {
+        const data = JSON.parse(e.data);
+        if (data.type === 'start') setStream('');
+        else if (data.type === 'chunk') setStream(prev => prev + data.content);
+        else if (data.type === 'done') {
+          setStream(prev => {
+            setMessages(msgs => [...msgs, { role: 'assistant', content: prev }]);
+            return '';
+          });
+        }
+        else if (data.type === 'insight') {
+           setMessages(msgs => [...msgs, { role: 'assistant', content: data.content }]);
+        }
+      } catch {}
+    };
+  }, [status]); // Re-bind if status changes (reconnected)
 
   useEffect(() => {
     connect();
     ELECTRON?.ipcRenderer.on('window-shown', () => console.log('Window shown'));
     return () => { ws.current?.close(); ELECTRON?.ipcRenderer.removeAllListeners('window-shown'); };
-  }, [connect]);
+  }, []); // Connect once
 
-  useEffect(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages]);
+  useEffect(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), [messages, stream]);
 
   const send = () => {
     if (!input.trim() || status !== 'connected') return;
@@ -64,25 +83,21 @@ const App: React.FC = () => {
     setInput('');
   };
 
-  const capture = async () => {
-    try { await fetch(`${API_BASE}/api/capture`); } 
-    catch (e) { console.error('Capture failed', e); }
-  };
-
   return (
     <div className="app-container">
       <div className="header">
         <Stoplight />
         <div className={`status-dot ${status}`} />
         <span>Good Listener</span>
-        <button onClick={capture} className="capture-btn" title="Force Capture">📸</button>
+        <button onClick={() => fetch(`${API_BASE}/api/capture`).catch(console.error)} className="capture-btn">📸</button>
       </div>
 
       <div className="chat-area">
-        {!messages.length && <div className="empty-state">Ready to help. Press Cmd+H to toggle.</div>}
+        {!messages.length && !stream && <div className="empty-state">Ready to help.</div>}
         {messages.map((m, i) => (
           <div key={i} className={`message ${m.role}`}>{m.content}</div>
         ))}
+        {stream && <div className="message assistant">{stream}</div>}
         <div ref={bottomRef} />
       </div>
 
