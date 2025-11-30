@@ -10,5 +10,11 @@ export interface Session {
   messages: Message[];
 }
 
-export type ConnectionStatus = 'connected' | 'disconnected';
+export interface Transcript {
+  id: string;
+  text: string;
+  source: 'user' | 'system';
+  timestamp: number;
+}
 
+export type ConnectionStatus = 'connected' | 'disconnected';

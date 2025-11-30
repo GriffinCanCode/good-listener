@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-from app.schemas import InsightPayload, ChunkPayload, StartPayload, DonePayload, ChatRequest
+from app.schemas import InsightPayload, ChunkPayload, StartPayload, DonePayload, ChatRequest, TranscriptPayload
 from app.services.monitor import BackgroundMonitor
 from app.services.llm import LLMService
 from app.services.capture import CaptureService
@@ -21,8 +21,8 @@ from app.routers import api
 # Instantiate services
 capture_service = CaptureService()
 ocr_service = OCRService()
-# Disable system audio capture to prevent picking up background media (TV, etc.)
-audio_service = AudioService(capture_system_audio=False)
+# Enable system audio capture for phone calls
+audio_service = AudioService(capture_system_audio=True)
 memory_service = MemoryService()
 llm_service = LLMService(provider="gemini", model_name="gemini-2.0-flash", memory_service=memory_service)
 
@@ -41,26 +41,23 @@ async def broadcast_insight(message: str):
     if not active_connections:
         return
     
-    # Wrap in JSON for the frontend
     payload = InsightPayload(content=message).model_dump_json()
-    
-    # Create tasks for all sends to run concurrently
     tasks = [connection.send_text(payload) for connection in active_connections]
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-    # Cleanup broken connections
-    for i, result in enumerate(results):
-        if isinstance(result, Exception):
-            print(f"Error broadcasting to client {i}: {result}")
-            # We can't easily remove from active_connections by index safely while iterating 
-            # if we were iterating the list, but here we know which one failed.
-            # Simpler: just let the websocket endpoint handle disconnects on read, 
-            # or remove here if we want to be proactive.
-            pass
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+async def broadcast_transcript(text: str, source: str):
+    """Sends a live transcript to all connected WebSocket clients."""
+    if not active_connections:
+        return
+        
+    payload = TranscriptPayload(text=text, source=source).model_dump_json()
+    tasks = [connection.send_text(payload) for connection in active_connections]
+    await asyncio.gather(*tasks, return_exceptions=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     monitor.on_insight = broadcast_insight
+    monitor.on_transcript = broadcast_transcript
     # Expose monitor to state so routers can access it
     app.state.monitor = monitor
     await monitor.start()

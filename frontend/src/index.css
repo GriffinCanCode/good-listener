@@ -230,6 +230,11 @@ body {
   color: var(--text-primary);
 }
 
+.icon-btn.active {
+    color: var(--accent);
+    background: rgba(59, 130, 246, 0.1);
+}
+
 .capture-btn:hover {
   color: var(--accent);
 }
@@ -428,3 +433,100 @@ textarea::placeholder {
 .close { background: #FF5F56; }
 .minimize { background: #FFBD2E; }
 .maximize { background: #27C93F; }
+
+/* Live Transcript Slide-out */
+.live-transcript-wrapper {
+    width: 320px;
+    background: var(--bg-sidebar);
+    border-left: 1px solid var(--border);
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    box-shadow: -5px 0 20px rgba(0,0,0,0.2);
+}
+
+.live-transcript-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.live-transcript-container.empty {
+    align-items: center;
+    justify-content: center;
+}
+
+.empty-message {
+    color: var(--text-secondary);
+    font-size: 13px;
+    margin-top: 20px;
+}
+
+.transcript-header {
+    height: 52px;
+    padding: 0 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.transcript-header h3 {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.transcript-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.transcript-item {
+    display: flex;
+    gap: 10px;
+    font-size: 13px;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.transcript-item.user {
+    border-left: 2px solid var(--accent);
+}
+
+.transcript-item.system {
+    border-left: 2px solid var(--danger);
+}
+
+.transcript-icon {
+    color: var(--text-secondary);
+    margin-top: 2px;
+}
+
+.transcript-content {
+    flex: 1;
+}
+
+.transcript-source {
+    display: block;
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+}
+
+.transcript-content p {
+    margin: 0;
+    line-height: 1.4;
+    color: var(--text-primary);
+}

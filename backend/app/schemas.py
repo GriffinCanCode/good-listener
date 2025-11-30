@@ -8,6 +8,11 @@ class InsightPayload(WebSocketPayload):
     type: Literal["insight"] = "insight"
     content: str
 
+class TranscriptPayload(WebSocketPayload):
+    type: Literal["transcript"] = "transcript"
+    text: str
+    source: str
+
 class ChunkPayload(WebSocketPayload):
     type: Literal["chunk"] = "chunk"
     content: str

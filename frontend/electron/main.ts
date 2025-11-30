@@ -47,6 +47,11 @@ function createWindow(): void {
     else mainWindow?.maximize();
   });
   ipcMain.on('window-close', () => mainWindow?.close());
+  ipcMain.on('window-resize', (event, width, height) => {
+    if (mainWindow) {
+      mainWindow.setSize(width, height, true);
+    }
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;

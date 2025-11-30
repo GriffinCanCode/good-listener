@@ -13,6 +13,7 @@ export const useChatConnection = () => {
   const commitStreamToMessage = useChatStore((state) => state.commitStreamToMessage);
   const addMessageToCurrent = useChatStore((state) => state.addMessageToCurrent);
   const updateCurrentSessionTitle = useChatStore((state) => state.updateCurrentSessionTitle);
+  const addTranscript = useChatStore((state) => state.addTranscript);
   const status = useChatStore((state) => state.status);
 
   const connect = useCallback(() => {
@@ -42,12 +43,15 @@ export const useChatConnection = () => {
           case 'insight':
             addMessageToCurrent({ role: 'assistant', content: data.content });
             break;
+          case 'transcript':
+            addTranscript(data.text, data.source);
+            break;
         }
       } catch (error) {
         console.error('Failed to parse WebSocket message:', error);
       }
     };
-  }, [setStatus, setStream, appendStreamToContent, commitStreamToMessage, addMessageToCurrent]);
+  }, [setStatus, setStream, appendStreamToContent, commitStreamToMessage, addMessageToCurrent, addTranscript]);
 
   useEffect(() => {
     connect();
@@ -79,4 +83,3 @@ export const useChatConnection = () => {
 
   return { sendMessage };
 };
-

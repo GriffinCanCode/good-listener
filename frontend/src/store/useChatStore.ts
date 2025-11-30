@@ -1,12 +1,13 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Session, Message, ConnectionStatus } from '../types';
+import { Session, Message, ConnectionStatus, Transcript } from '../types';
 
 interface ChatState {
   sessions: Session[];
   currentSessionId: string | null;
   stream: string;
   status: ConnectionStatus;
+  liveTranscripts: Transcript[];
 
   // Actions
   createSession: () => void;
@@ -19,6 +20,8 @@ interface ChatState {
   commitStreamToMessage: () => void;
   clearStream: () => void;
   setStatus: (status: ConnectionStatus) => void;
+  addTranscript: (text: string, source: string) => void;
+  clearTranscripts: () => void;
   
   // Computeds
   getCurrentSession: () => Session | undefined;
@@ -31,6 +34,7 @@ export const useChatStore = create<ChatState>()(
       currentSessionId: null,
       stream: '',
       status: 'disconnected',
+      liveTranscripts: [],
 
       getCurrentSession: () => {
         const { sessions, currentSessionId } = get();
@@ -118,6 +122,36 @@ export const useChatStore = create<ChatState>()(
 
       clearStream: () => set({ stream: '' }),
       setStatus: (status) => set({ status }),
+      
+      addTranscript: (text, source) => {
+        set((state) => {
+            // Deduplication logic
+            const now = Date.now();
+            const lastTranscript = state.liveTranscripts[state.liveTranscripts.length - 1];
+            
+            // If same text and source within 1 second, ignore
+            if (lastTranscript && 
+                lastTranscript.text === text && 
+                lastTranscript.source === source && 
+                (now - lastTranscript.timestamp) < 1000) {
+                return state;
+            }
+
+            return {
+                liveTranscripts: [
+                    ...state.liveTranscripts,
+                    {
+                        id: now.toString() + Math.random(),
+                        text,
+                        source: source as 'user' | 'system',
+                        timestamp: now
+                    }
+                ].slice(-50)
+            };
+        });
+      },
+      
+      clearTranscripts: () => set({ liveTranscripts: [] }),
     }),
     {
       name: 'chat_sessions',

@@ -6,7 +6,7 @@ import queue
 import threading
 import logging
 import time
-from typing import List, Callable
+from typing import List, Callable, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,8 @@ class DeviceListener:
         self.speech_buffer = []
         self.is_speaking = False
         self.silence_chunks = 0
-        self.max_silence_chunks = 30  # ~1 sec
+        # Reduced latency: ~0.5 sec silence triggers transcription
+        self.max_silence_chunks = 15
 
     def start(self):
         self.is_listening = True
@@ -99,9 +100,11 @@ class AudioService:
         devices = self._get_input_devices()
         logger.info(f"Initializing listeners for devices: {devices}")
         
-        for dev_idx in devices:
+        for dev_idx, source_type in devices:
             try:
-                listener = DeviceListener(dev_idx, 16000, self._transcribe, self.vad_threshold)
+                # Create a closure that captures source_type
+                cb = lambda audio, st=source_type: self._transcribe(audio, st)
+                listener = DeviceListener(dev_idx, 16000, cb, self.vad_threshold)
                 listener.start()
                 self.listeners.append(listener)
             except Exception as e:
@@ -113,37 +116,42 @@ class AudioService:
         self.listeners.clear()
         logger.info("Audio service stopped.")
 
-    def _transcribe(self, audio_data):
+    def _transcribe(self, audio_data, source_type: str):
         with self.lock:
             try:
                 audio_data = audio_data.flatten().astype(np.float32)
-                segments, _ = self.model.transcribe(audio_data, beam_size=5)
+                # Optimized beam_size=1 for real-time speed
+                segments, _ = self.model.transcribe(audio_data, beam_size=1)
                 text = " ".join([s.text for s in segments]).strip()
                 
                 if text:
-                    logger.info(f"Transcribed: {text}")
+                    logger.info(f"Transcribed ({source_type}): {text}")
                     if self.callback:
-                        self.callback(text)
+                        self.callback(text, source_type)
             except Exception as e:
                 logger.error(f"Transcription error: {e}")
 
-    def _get_input_devices(self) -> List[int]:
-        """Returns unique list of input device indices."""
-        indices = set()
+    def _get_input_devices(self) -> List[Tuple[int, str]]:
+        """Returns list of (device_index, source_type)."""
+        indices = []
         try:
             if (def_idx := sd.default.device[0]) is not None and def_idx >= 0:
-                indices.add(def_idx)
+                indices.append((def_idx, "user"))
         except Exception as e:
             logger.warning(f"Default device error: {e}")
 
         if self.capture_system_audio:
-            targets = {'blackhole', 'vb-cable', 'loopback'}
+            targets = {'blackhole', 'vb-cable', 'loopback', 'monitor'}
             try:
-                indices.update(
-                    i for i, dev in enumerate(sd.query_devices())
-                    if dev['max_input_channels'] > 0 and any(t in dev['name'].lower() for t in targets)
-                )
+                # Iterate all devices to find system audio loopbacks
+                for i, dev in enumerate(sd.query_devices()):
+                    if dev['max_input_channels'] > 0:
+                        name = dev['name'].lower()
+                        if any(t in name for t in targets):
+                            # Avoid duplicating the default device if it happens to be one of these (unlikely for mic)
+                            if not any(idx == i for idx, _ in indices):
+                                indices.append((i, "system"))
             except Exception as e:
                 logger.error(f"Device query error: {e}")
             
-        return list(indices)
+        return indices
