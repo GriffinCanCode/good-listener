@@ -3,12 +3,11 @@ package audio
 
 import (
 	"context"
-	"encoding/binary"
 	"log/slog"
-	"math"
 	"sync"
+	"time"
 
-	"github.com/gen2brain/malgo"
+	"github.com/gordonklaus/portaudio"
 )
 
 // Chunk represents a captured audio chunk.
@@ -21,39 +20,37 @@ type Chunk struct {
 
 // Capturer captures audio from devices with backpressure.
 type Capturer struct {
-	ctx         *malgo.AllocatedContext
-	devices     []*deviceCapture
-	outCh       chan Chunk
-	sampleRate  uint32
-	mu          sync.Mutex
-	running     bool
-	systemAudio bool
+	devices      []*deviceCapture
+	outCh        chan Chunk
+	sampleRate   int
+	framesPerBuf int
+	mu           sync.Mutex
+	running      bool
+	systemAudio  bool
 }
 
 type deviceCapture struct {
-	device   *malgo.Device
+	stream   *portaudio.Stream
+	cancel   context.CancelFunc
 	stopOnce sync.Once
 }
 
 // NewCapturer creates a new audio capturer.
-func NewCapturer(sampleRate int, bufferSize int, captureSystemAudio bool) (*Capturer, error) {
-	ctx, err := malgo.InitContext(nil, malgo.ContextConfig{}, nil)
-	if err != nil {
+func NewCapturer(sampleRate, bufferSize int, captureSystemAudio bool) (*Capturer, error) {
+	if err := portaudio.Initialize(); err != nil {
 		return nil, err
 	}
 
 	return &Capturer{
-		ctx:         ctx,
-		outCh:       make(chan Chunk, bufferSize),
-		sampleRate:  uint32(sampleRate),
-		systemAudio: captureSystemAudio,
+		outCh:        make(chan Chunk, bufferSize),
+		sampleRate:   sampleRate,
+		framesPerBuf: 1024, // ~23ms at 44100Hz
+		systemAudio:  captureSystemAudio,
 	}, nil
 }
 
 // Output returns the channel for receiving audio chunks.
-func (c *Capturer) Output() <-chan Chunk {
-	return c.outCh
-}
+func (c *Capturer) Output() <-chan Chunk { return c.outCh }
 
 // Start begins capturing audio from available devices.
 func (c *Capturer) Start(ctx context.Context) error {
@@ -65,13 +62,17 @@ func (c *Capturer) Start(ctx context.Context) error {
 	c.running = true
 	c.mu.Unlock()
 
-	devices, err := c.ctx.Devices(malgo.Capture)
+	devices, err := portaudio.Devices()
 	if err != nil {
 		return err
 	}
 
-	for _, info := range devices {
-		source := c.classifyDevice(info.Name())
+	for _, dev := range devices {
+		if dev.MaxInputChannels < 1 {
+			continue
+		}
+
+		source := c.classifyDevice(dev.Name)
 		if source == "" {
 			continue
 		}
@@ -79,18 +80,17 @@ func (c *Capturer) Start(ctx context.Context) error {
 			continue
 		}
 
-		if err := c.startDevice(ctx, info, source); err != nil {
-			slog.Warn("failed to start device", "device", info.Name(), "error", err)
+		if err := c.startDevice(ctx, dev, source); err != nil {
+			slog.Warn("failed to start device", "device", dev.Name, "error", err)
 			continue
 		}
-		slog.Info("started audio capture", "device", info.Name(), "source", source)
+		slog.Info("started audio capture", "device", dev.Name, "source", source)
 	}
 
 	return nil
 }
 
 func (c *Capturer) classifyDevice(name string) string {
-	// Check for system audio loopback devices
 	systemKeywords := []string{"blackhole", "vb-cable", "loopback", "monitor", "soundflower"}
 	for _, kw := range systemKeywords {
 		if containsIgnoreCase(name, kw) {
@@ -98,7 +98,6 @@ func (c *Capturer) classifyDevice(name string) string {
 		}
 	}
 
-	// Check for microphone
 	micKeywords := []string{"microphone", "input", "mic", "built-in"}
 	for _, kw := range micKeywords {
 		if containsIgnoreCase(name, kw) {
@@ -109,56 +108,64 @@ func (c *Capturer) classifyDevice(name string) string {
 	return ""
 }
 
-func (c *Capturer) startDevice(ctx context.Context, info malgo.DeviceInfo, source string) error {
-	deviceConfig := malgo.DefaultDeviceConfig(malgo.Capture)
-	deviceConfig.Capture.Format = malgo.FormatF32
-	deviceConfig.Capture.Channels = 1
-	deviceConfig.SampleRate = c.sampleRate
-	deviceConfig.Capture.DeviceID = info.ID.Pointer()
+func (c *Capturer) startDevice(ctx context.Context, dev *portaudio.DeviceInfo, source string) error {
+	params := portaudio.StreamParameters{
+		Input: portaudio.StreamDeviceParameters{
+			Device:   dev,
+			Channels: 1,
+			Latency:  dev.DefaultLowInputLatency,
+		},
+		SampleRate:      float64(c.sampleRate),
+		FramesPerBuffer: c.framesPerBuf,
+	}
 
-	deviceID := info.Name()
+	buf := make([]float32, c.framesPerBuf)
+	stream, err := portaudio.OpenStream(params, buf)
+	if err != nil {
+		return err
+	}
 
-	callbacks := malgo.DeviceCallbacks{
-		Data: func(_, pSamples []byte, frameCount uint32) {
-			samples := bytesToFloat32(pSamples)
-			if len(samples) == 0 {
+	if err := stream.Start(); err != nil {
+		stream.Close()
+		return err
+	}
+
+	devCtx, cancel := context.WithCancel(ctx)
+	dc := &deviceCapture{stream: stream, cancel: cancel}
+
+	c.mu.Lock()
+	c.devices = append(c.devices, dc)
+	c.mu.Unlock()
+
+	deviceID := dev.Name
+
+	go func() {
+		defer dc.stop()
+		for {
+			select {
+			case <-devCtx.Done():
+				return
+			default:
+			}
+
+			if err := stream.Read(); err != nil {
+				slog.Debug("audio read error", "device", deviceID, "error", err)
 				return
 			}
 
 			chunk := Chunk{
-				Data:     samples,
-				DeviceID: deviceID,
-				Source:   source,
+				Data:      append([]float32(nil), buf...),
+				DeviceID:  deviceID,
+				Source:    source,
+				Timestamp: time.Now().UnixNano(),
 			}
 
-			// Non-blocking send with backpressure - drop if channel full
 			select {
 			case c.outCh <- chunk:
 			default:
 				slog.Debug("audio buffer full, dropping chunk", "device", deviceID)
 			}
-		},
-	}
-
-	device, err := malgo.InitDevice(c.ctx.Context, deviceConfig, callbacks)
-	if err != nil {
-		return err
-	}
-
-	if err := device.Start(); err != nil {
-		device.Uninit()
-		return err
-	}
-
-	dc := &deviceCapture{device: device}
-	c.mu.Lock()
-	c.devices = append(c.devices, dc)
-	c.mu.Unlock()
-
-	// Stop device when context is canceled.
-	go func() {
-		<-ctx.Done()
-		dc.stop()
+		}
 	}()
 
 	return nil
@@ -166,10 +173,13 @@ func (c *Capturer) startDevice(ctx context.Context, info malgo.DeviceInfo, sourc
 
 func (d *deviceCapture) stop() {
 	d.stopOnce.Do(func() {
-		if d.device.IsStarted() {
-			_ = d.device.Stop()
+		if d.cancel != nil {
+			d.cancel()
 		}
-		d.device.Uninit()
+		if d.stream != nil {
+			_ = d.stream.Stop()
+			_ = d.stream.Close()
+		}
 	})
 }
 
@@ -183,28 +193,13 @@ func (c *Capturer) Stop() {
 	}
 	c.devices = nil
 	c.running = false
-}
-
-// Float32 byte size constant
-const float32ByteSize = 4
-
-func bytesToFloat32(b []byte) []float32 {
-	if len(b)%float32ByteSize != 0 {
-		return nil
-	}
-	samples := make([]float32, len(b)/float32ByteSize)
-	for i := range samples {
-		bits := binary.LittleEndian.Uint32(b[i*float32ByteSize:])
-		samples[i] = math.Float32frombits(bits)
-	}
-	return samples
+	_ = portaudio.Terminate()
 }
 
 func containsIgnoreCase(s, substr string) bool {
 	return len(s) >= len(substr) && (s == substr || containsIgnoreCaseImpl(s, substr))
 }
 
-// ASCII case offset ('a' - 'A')
 const asciiCaseOffset = 'a' - 'A'
 
 func containsIgnoreCaseImpl(s, substr string) bool {

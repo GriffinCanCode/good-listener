@@ -8,13 +8,13 @@ import (
 
 func TestStoreAdd(t *testing.T) {
 	s := NewStore(30, 10)
-	s.Add("Hello", "user")
+	s.Add("Hello", "user", "You")
 
 	entries := s.Entries()
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(entries))
 	}
-	if entries[0].Text != "Hello" || entries[0].Source != "user" {
+	if entries[0].Text != "Hello" || entries[0].Source != "user" || entries[0].Speaker != "You" {
 		t.Errorf("unexpected entry: %+v", entries[0])
 	}
 }
@@ -22,7 +22,7 @@ func TestStoreAdd(t *testing.T) {
 func TestStoreMaxSize(t *testing.T) {
 	s := NewStore(5, 10)
 	for i := 0; i < 10; i++ {
-		s.Add("msg", "user")
+		s.Add("msg", "user", "You")
 	}
 
 	if len(s.Entries()) != 5 {
@@ -32,7 +32,7 @@ func TestStoreMaxSize(t *testing.T) {
 
 func TestGetRecent(t *testing.T) {
 	s := NewStore(30, 10)
-	s.Add("Recent", "user")
+	s.Add("Recent", "user", "You")
 
 	// Manually add an old entry
 	s.mu.Lock()
@@ -157,7 +157,7 @@ func TestGetRecentWithSummaries(t *testing.T) {
 	s.StoreSummary(now.Add(-10*time.Minute), now.Add(-5*time.Minute), "Previous discussion about X")
 
 	// Add recent entry
-	s.Add("Current message", "user")
+	s.Add("Current message", "user", "You")
 
 	recent := s.GetRecent(600) // 10 minutes
 	if !strings.Contains(recent, "[Summary]") {

@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/coder/websocket v1.8.12
 	github.com/corona10/goimagehash v1.1.0
-	github.com/gen2brain/malgo v0.11.22
+	github.com/gordonklaus/portaudio v0.0.0-20230709114228-aafa478834f5
 	google.golang.org/grpc v1.75.0
 	google.golang.org/protobuf v1.36.10
 )

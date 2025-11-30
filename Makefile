@@ -1,9 +1,22 @@
-.PHONY: all proto inference platform frontend dev clean test install help \
+.PHONY: all setup setup-deps setup-verify proto inference platform frontend dev clean test install help \
         backend-proto backend-inference backend-platform backend-test backend-install backend-clean \
         backend-e2e-test backend-proto-test backend-test-all backend-start
 
 # Default target
 all: backend-proto backend-platform
+
+# ============================================================================
+# Setup (installs all system dependencies)
+# ============================================================================
+
+setup:
+	@./scripts/setup.sh
+
+setup-deps:
+	@./scripts/setup.sh --deps-only
+
+setup-verify:
+	@./scripts/setup.sh --verify
 
 # ============================================================================
 # Backend (delegates to backend/Makefile)
@@ -115,7 +128,10 @@ help:
 	@echo "Good Listener - Available Commands"
 	@echo ""
 	@echo "Setup:"
-	@echo "  make install              - Install all dependencies"
+	@echo "  make setup                - Full setup (system deps + project deps)"
+	@echo "  make setup-deps           - Install system dependencies only"
+	@echo "  make setup-verify         - Verify system dependencies"
+	@echo "  make install              - Install project dependencies"
 	@echo "  make proto                - Generate protobuf files"
 	@echo ""
 	@echo "Development:"

@@ -21,7 +21,7 @@ func TestFloat32ToBytes(t *testing.T) {
 func TestTranscriptStore(t *testing.T) {
 	store := transcript.NewStore(30, 10)
 
-	store.Add("Hello world", "user")
+	store.Add("Hello world", "user", "You")
 	entries := store.Entries()
 
 	if len(entries) != 1 {
@@ -39,7 +39,7 @@ func TestTranscriptStoreMaxSize(t *testing.T) {
 	store := transcript.NewStore(30, 10)
 
 	for i := 0; i < 35; i++ {
-		store.Add("message", "user")
+		store.Add("message", "user", "You")
 	}
 
 	entries := store.Entries()
@@ -50,8 +50,8 @@ func TestTranscriptStoreMaxSize(t *testing.T) {
 
 func TestTranscriptGetRecent(t *testing.T) {
 	store := transcript.NewStore(30, 10)
-	store.Add("Hello", "user")
-	store.Add("Hi there", "system")
+	store.Add("Hello", "user", "You")
+	store.Add("Hi there", "system", "Speaker")
 
 	recent := store.GetRecent(60)
 

@@ -71,28 +71,6 @@ func TestContainsIgnoreCase(t *testing.T) {
 	}
 }
 
-func TestBytesToFloat32(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    []byte
-		expected int // expected length of output
-	}{
-		{"empty", []byte{}, 0},
-		{"4 bytes = 1 float", []byte{0, 0, 0, 0}, 1},
-		{"8 bytes = 2 floats", []byte{0, 0, 0, 0, 0, 0, 128, 63}, 2}, // 0.0 and 1.0
-		{"invalid length", []byte{0, 0, 0}, 0},                       // not divisible by 4
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result := bytesToFloat32(tt.input)
-			if len(result) != tt.expected {
-				t.Errorf("bytesToFloat32 returned %d floats, want %d", len(result), tt.expected)
-			}
-		})
-	}
-}
-
 func TestChunkChannel(t *testing.T) {
 	// Test that chunk channel has correct buffer size
 	bufferSize := 50
