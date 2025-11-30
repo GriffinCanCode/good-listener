@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+from app.schemas import InsightPayload, ChunkPayload, StartPayload, DonePayload, ChatRequest
 from app.services.monitor import BackgroundMonitor
 from app.services.llm import LLMService
 from app.services.capture import CaptureService
@@ -43,10 +44,7 @@ async def broadcast_insight(message: str):
         return
     
     # Wrap in JSON for the frontend
-    payload = json.dumps({
-        "type": "insight",
-        "content": message
-    })
+    payload = InsightPayload(content=message).model_dump_json()
     
     # Create tasks for all sends to run concurrently
     tasks = [connection.send_text(payload) for connection in active_connections]
@@ -88,10 +86,9 @@ async def websocket_endpoint(websocket: WebSocket):
     active_connections.append(websocket)
     
     if not monitor.audio_service.using_system_audio:
-        await websocket.send_json({
-            "type": "insight",
-            "content": "⚠️ System audio not detected. Install 'BlackHole' or 'Loopback' for better audio capture. Defaulting to microphone."
-        })
+        await websocket.send_json(InsightPayload(
+            content="⚠️ System audio not detected. Install 'BlackHole' or 'Loopback' for better audio capture. Defaulting to microphone."
+        ).model_dump())
 
     try:
         while True:
@@ -99,18 +96,23 @@ async def websocket_endpoint(websocket: WebSocket):
             message_data = json.loads(data)
             
             if message_data.get("type") == "chat":
-                user_query = message_data.get("message", "")
+                try:
+                    chat_req = ChatRequest(**message_data)
+                    user_query = chat_req.message
+                except Exception:
+                    continue
+
                 current_text = monitor.latest_text or "No text on screen."
                 
                 # Signal start of response
-                await websocket.send_json({"type": "start", "role": "assistant"})
+                await websocket.send_json(StartPayload().model_dump())
                 
                 # Stream chunks
                 async for chunk in llm_service.analyze(current_text, user_query, monitor.latest_image):
-                    await websocket.send_json({"type": "chunk", "content": chunk})
+                    await websocket.send_json(ChunkPayload(content=chunk).model_dump())
                 
                 # Signal completion
-                await websocket.send_json({"type": "done"})
+                await websocket.send_json(DonePayload().model_dump())
                 
     except WebSocketDisconnect:
         if websocket in active_connections:
