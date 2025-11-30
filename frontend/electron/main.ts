@@ -57,7 +57,9 @@ function createWindow(): void {
     mainWindow = null;
   });
   
-  mainWindow.show();
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+  });
 }
 
 app.on('ready', () => {
