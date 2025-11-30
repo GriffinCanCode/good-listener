@@ -1,42 +1,35 @@
 import React from 'react';
 import { MessageSquare, Trash2, Plus, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useChatStore } from '../store/useChatStore';
+import { useUIStore } from '../store/useUIStore';
 
-interface Session {
-  id: string;
-  title: string;
-  date: string;
-}
+export const Sidebar: React.FC = () => {
+  const { 
+    sessions, 
+    currentSessionId, 
+    selectSession, 
+    createSession, 
+    deleteSession 
+  } = useChatStore();
+  
+  const { isSidebarOpen, setSidebarOpen } = useUIStore();
 
-interface SidebarProps {
-  isOpen: boolean;
-  onClose: () => void;
-  sessions: Session[];
-  currentSessionId: string | null;
-  onSelectSession: (id: string) => void;
-  onNewSession: () => void;
-  onDeleteSession: (id: string, e: React.MouseEvent) => void;
-}
+  const handleDelete = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    deleteSession(id);
+  };
 
-export const Sidebar: React.FC<SidebarProps> = ({
-  isOpen,
-  onClose,
-  sessions,
-  currentSessionId,
-  onSelectSession,
-  onNewSession,
-  onDeleteSession
-}) => {
   return (
     <AnimatePresence>
-      {isOpen && (
+      {isSidebarOpen && (
         <>
           {/* Backdrop */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            onClick={onClose}
+            onClick={() => setSidebarOpen(false)}
             className="sidebar-backdrop"
           />
           
@@ -50,12 +43,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <div className="sidebar-header">
               <h2>History</h2>
-              <button onClick={onClose} className="icon-btn">
+              <button onClick={() => setSidebarOpen(false)} className="icon-btn">
                 <X size={18} />
               </button>
             </div>
 
-            <button onClick={onNewSession} className="new-chat-btn">
+            <button onClick={createSession} className="new-chat-btn">
               <Plus size={16} />
               <span>New Chat</span>
             </button>
@@ -69,13 +62,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 sessions.map(session => (
                   <div
                     key={session.id}
-                    onClick={() => onSelectSession(session.id)}
+                    onClick={() => selectSession(session.id)}
                     className={`session-item ${session.id === currentSessionId ? 'active' : ''}`}
                   >
                     <MessageSquare size={16} className="session-icon" />
                     <span className="session-title">{session.title}</span>
                     <button
-                      onClick={(e) => onDeleteSession(session.id, e)}
+                      onClick={(e) => handleDelete(session.id, e)}
                       className="delete-btn"
                     >
                       <Trash2 size={14} />
@@ -90,4 +83,3 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </AnimatePresence>
   );
 };
-
