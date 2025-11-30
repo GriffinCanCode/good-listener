@@ -1,65 +1,53 @@
 /**
- * GSAP Presence Hook - Handles mount/unmount animations
- * Replaces framer-motion's AnimatePresence with GSAP-powered transitions
+ * GSAP Presence Hook
+ * Succinct replacement for AnimatePresence logic.
  */
 
 import gsap from 'gsap';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { duration, ease, type PresenceAnimation, presenceAnimations } from '../lib/animations';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// useGsapPresence - For single conditional elements
-// ═══════════════════════════════════════════════════════════════════════════
+import { duration, ease, presenceAnimations, type PresenceAnimation } from '../lib/animations';
 
 interface UseGsapPresenceOptions {
   animation?: keyof typeof presenceAnimations | PresenceAnimation;
   onExitComplete?: () => void;
 }
 
-export const useGsapPresence = (isVisible: boolean, options: UseGsapPresenceOptions = {}) => {
-  const { animation = 'fade', onExitComplete } = options;
+export const useGsapPresence = (
+  isVisible: boolean,
+  { animation = 'fade', onExitComplete }: UseGsapPresenceOptions = {}
+) => {
   const [shouldRender, setShouldRender] = useState(isVisible);
   const ref = useRef<HTMLDivElement>(null);
-  const isFirstRender = useRef(true);
-
+  const firstRender = useRef(true);
   const anim = typeof animation === 'string' ? presenceAnimations[animation] : animation;
 
   useEffect(() => {
     const el = ref.current;
-    if (!el) return;
+    if (!el || !anim) return;
 
     if (isVisible) {
       setShouldRender(true);
+      gsap.set(el, { opacity: 0 }); // Ensure hidden initially
       requestAnimationFrame(() => {
-        if (ref.current) {
-          gsap.set(ref.current, { opacity: 0 });
-          anim.enter(ref.current);
-        }
+        anim.enter(el);
       });
-    } else if (!isFirstRender.current) {
+    } else if (!firstRender.current) {
       anim.exit(el, () => {
         setShouldRender(false);
         onExitComplete?.();
       });
     }
-
-    isFirstRender.current = false;
+    firstRender.current = false;
   }, [isVisible, anim, onExitComplete]);
 
-  // Initial state setup
+  // Initial mount animation check
   useEffect(() => {
-    if (ref.current && isVisible) {
-      anim.enter(ref.current);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only run on mount
+    if (isVisible && ref.current && anim) anim.enter(ref.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { ref, shouldRender };
 };
-
-// ═══════════════════════════════════════════════════════════════════════════
-// useGsapListPresence - For animated lists with staggered items
-// ═══════════════════════════════════════════════════════════════════════════
 
 interface UseGsapListPresenceOptions<T> {
   getKey: (item: T) => string | number;
@@ -68,55 +56,59 @@ interface UseGsapListPresenceOptions<T> {
   staggerDelay?: number;
 }
 
-export const useGsapListPresence = <T>(items: T[], options: UseGsapListPresenceOptions<T>) => {
-  const { getKey, staggerDelay = 0.05 } = options;
+export const useGsapListPresence = <T>(
+  items: T[],
+  { getKey, enterAnimation, exitAnimation, staggerDelay = 0.05 }: UseGsapListPresenceOptions<T>
+) => {
   const [renderedItems, setRenderedItems] = useState<T[]>(items);
-  const exitingRefs = useRef<Map<string | number, Element>>(new Map());
   const itemRefs = useRef<Map<string | number, Element>>(new Map());
+  const exitingRefs = useRef<Set<string | number>>(new Set());
 
-  const enterAnimation =
-    options.enterAnimation ??
-    ((el: Element, index: number) =>
-      gsap.fromTo(
+  const enter = useCallback(
+    (el: Element, i: number) => {
+      if (enterAnimation) return enterAnimation(el, i);
+      return gsap.fromTo(
         el,
         { opacity: 0, y: 12 },
-        {
-          opacity: 1,
-          y: 0,
-          duration: duration.normal,
-          ease: ease.butter,
-          delay: index * staggerDelay,
-        }
-      ));
+        { opacity: 1, y: 0, duration: duration.normal, ease: ease.butter, delay: i * staggerDelay }
+      );
+    },
+    [enterAnimation, staggerDelay]
+  );
 
-  const exitAnimation =
-    options.exitAnimation ??
-    ((el: Element, onComplete: () => void) =>
-      gsap.to(el, { opacity: 0, x: -6, duration: duration.fast, ease: ease.sharp, onComplete }));
+  const exit = useCallback(
+    (el: Element, done: () => void) => {
+      if (exitAnimation) return exitAnimation(el, done);
+      return gsap.to(el, {
+        opacity: 0,
+        x: -6,
+        duration: duration.fast,
+        ease: ease.sharp,
+        onComplete: done,
+      });
+    },
+    [exitAnimation]
+  );
 
   useEffect(() => {
     const currentKeys = new Set(items.map(getKey));
     const renderedKeys = new Set(renderedItems.map(getKey));
 
-    // Find items to add
-    const newItems = items.filter((item) => !renderedKeys.has(getKey(item)));
+    const added = items.filter((i) => !renderedKeys.has(getKey(i)));
+    const removed = renderedItems.filter((i) => !currentKeys.has(getKey(i)));
 
-    // Find items to remove
-    const removingItems = renderedItems.filter((item) => !currentKeys.has(getKey(item)));
-
-    if (removingItems.length > 0) {
+    // Handle removals
+    if (removed.length) {
       let completed = 0;
-      removingItems.forEach((item) => {
+      removed.forEach((item) => {
         const key = getKey(item);
         const el = itemRefs.current.get(key);
         if (el) {
-          exitingRefs.current.set(key, el);
-          exitAnimation(el, () => {
+          exitingRefs.current.add(key);
+          exit(el, () => {
             completed++;
             exitingRefs.current.delete(key);
-            if (completed === removingItems.length) {
-              setRenderedItems(items);
-            }
+            if (completed === removed.length) setRenderedItems(items);
           });
         }
       });
@@ -124,25 +116,27 @@ export const useGsapListPresence = <T>(items: T[], options: UseGsapListPresenceO
       setRenderedItems(items);
     }
 
-    // Animate in new items after a frame
-    if (newItems.length > 0) {
+    // Handle additions
+    if (added.length) {
       requestAnimationFrame(() => {
-        newItems.forEach((item, i) => {
+        added.forEach((item, i) => {
           const el = itemRefs.current.get(getKey(item));
           if (el) {
             gsap.set(el, { opacity: 0 });
-            enterAnimation(el, i);
+            enter(el, i);
           }
         });
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- we want to control when this updates
-  }, [items, getKey, enterAnimation, exitAnimation]);
+  }, [items, getKey, enter, exit, renderedItems]);
 
   const setRef = useCallback(
     (key: string | number) => (el: Element | null) => {
-      if (el) itemRefs.current.set(key, el);
-      else itemRefs.current.delete(key);
+      if (el) {
+        itemRefs.current.set(key, el);
+      } else {
+        itemRefs.current.delete(key);
+      }
     },
     []
   );
@@ -154,98 +148,39 @@ export const useGsapListPresence = <T>(items: T[], options: UseGsapListPresenceO
   };
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// useGsapAnimation - For simple enter animations on mount
-// ═══════════════════════════════════════════════════════════════════════════
-
-interface UseGsapAnimationOptions {
-  animation?: (el: Element) => gsap.core.Tween | gsap.core.Timeline;
-}
-
-export const useGsapAnimation = <T extends HTMLElement>(options: UseGsapAnimationOptions = {}) => {
+export const useGsapAnimation = <T extends HTMLElement>({
+  animation,
+}: { animation?: (el: Element) => gsap.core.Tween | gsap.core.Timeline } = {}) => {
   const ref = useRef<T>(null);
-  const { animation } = options;
-
-  const defaultAnimation = useCallback(
-    (el: Element) =>
-      gsap.fromTo(
-        el,
-        { opacity: 0, y: 8 },
-        { opacity: 1, y: 0, duration: duration.normal, ease: ease.butter }
-      ),
-    []
-  );
-
   useEffect(() => {
-    if (ref.current) {
-      (animation ?? defaultAnimation)(ref.current);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only run on mount
-  }, []);
-
+    if (ref.current)
+      (
+        animation ??
+        ((el) =>
+          gsap.fromTo(
+            el,
+            { opacity: 0, y: 8 },
+            { opacity: 1, y: 0, duration: duration.normal, ease: ease.butter }
+          ))
+      )(ref.current);
+  }, [animation]);
   return ref;
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// useGsapSpring - GSAP spring-like value
-// ═══════════════════════════════════════════════════════════════════════════
-
-interface SpringConfig {
-  stiffness?: number;
-  damping?: number;
-}
-
-export const useGsapSpring = (targetValue: number, config: SpringConfig = {}) => {
-  const { stiffness = 300, damping = 15 } = config;
-  const [value, setValue] = useState(targetValue);
-  const tweenRef = useRef<gsap.core.Tween | null>(null);
-  const valueRef = useRef({ v: targetValue });
-
-  useEffect(() => {
-    if (tweenRef.current) tweenRef.current.kill();
-
-    // Convert spring physics to duration (approximation)
-    const springDuration = Math.sqrt(1 / stiffness) * damping * 0.08;
-
-    tweenRef.current = gsap.to(valueRef.current, {
-      v: targetValue,
-      duration: springDuration,
-      ease: 'power2.out',
-      onUpdate: () => setValue(valueRef.current.v),
-    });
-
-    return () => {
-      tweenRef.current?.kill();
-    };
-  }, [targetValue, stiffness, damping]);
-
-  return value;
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// useButtonPress - Press/release animations for buttons
-// ═══════════════════════════════════════════════════════════════════════════
-
 export const useButtonPress = <T extends HTMLElement>() => {
   const ref = useRef<T>(null);
-
-  const handlers = {
-    onMouseDown: () => {
-      if (ref.current) {
-        gsap.to(ref.current, { scale: 0.92, duration: 0.1, ease: ease.snap });
-      }
-    },
-    onMouseUp: () => {
-      if (ref.current) {
-        gsap.to(ref.current, { scale: 1, duration: 0.2, ease: ease.bounce });
-      }
-    },
-    onMouseLeave: () => {
-      if (ref.current) {
-        gsap.to(ref.current, { scale: 1, duration: 0.2, ease: ease.butter });
-      }
+  return {
+    ref,
+    handlers: {
+      onMouseDown: () => {
+        if (ref.current) gsap.to(ref.current, { scale: 0.92, duration: 0.1, ease: ease.snap });
+      },
+      onMouseUp: () => {
+        if (ref.current) gsap.to(ref.current, { scale: 1, duration: 0.2, ease: ease.bounce });
+      },
+      onMouseLeave: () => {
+        if (ref.current) gsap.to(ref.current, { scale: 1, duration: 0.2, ease: ease.butter });
+      },
     },
   };
-
-  return { ref, handlers };
 };

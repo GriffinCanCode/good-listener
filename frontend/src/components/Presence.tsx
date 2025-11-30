@@ -1,6 +1,6 @@
 /**
- * Presence - GSAP-powered AnimatePresence replacement
- * Handles smooth enter/exit animations for conditional renders
+ * Presence Component
+ * Declarative wrapper for GSAP animations.
  */
 
 import gsap from 'gsap';
@@ -20,14 +20,9 @@ interface ChildState {
   isExiting: boolean;
 }
 
-const getChildKey = (child: React.ReactElement): string => {
-  const k = child.key as string | number | null;
-  if (typeof k === 'string') return k;
-  if (typeof k === 'number') return k.toString();
-  return 'single';
-};
+const getChildKey = (child: React.ReactElement): string =>
+  child.key != null ? String(child.key as React.Key) : 'single';
 
-/** Declarative presence wrapper - handles enter/exit animations automatically */
 export const Presence: React.FC<PresenceProps> = ({ children, animation = 'fade' }) => {
   const [childStates, setChildStates] = useState<ChildState[]>([]);
   const refs = useRef<Map<string, HTMLElement>>(new Map());
@@ -36,72 +31,66 @@ export const Presence: React.FC<PresenceProps> = ({ children, animation = 'fade'
   useEffect(() => {
     const newChildren = Children.toArray(children).filter(isValidElement) as React.ReactElement[];
     const newKeys = new Set(newChildren.map(getChildKey));
-    const currentKeys = new Set(childStates.filter((s) => !s.isExiting).map((s) => s.key));
 
     setChildStates((prev) => {
-      const result: ChildState[] = [];
+      const next: ChildState[] = [];
+      const currentKeys = new Set(prev.filter((s) => !s.isExiting).map((s) => s.key));
 
-      // Mark exiting children
+      // Handle Exits
       prev.forEach((state) => {
         if (!newKeys.has(state.key) && !state.isExiting) {
-          result.push({ ...state, isExiting: true });
           const el = refs.current.get(state.key);
-          if (el) {
-            anim.exit(el, () => {
-              setChildStates((p) => p.filter((s) => s.key !== state.key));
-            });
-          }
-        } else if (!state.isExiting && newKeys.has(state.key)) {
-          // Update existing element
+          if (el && anim)
+            anim.exit(el, () => setChildStates((p) => p.filter((s) => s.key !== state.key)));
+          next.push({ ...state, isExiting: true });
+        } else if (newKeys.has(state.key) && !state.isExiting) {
+          // Update existing
           const updated = newChildren.find((c) => getChildKey(c) === state.key);
-          result.push({ ...state, element: updated ?? state.element });
+          next.push({ ...state, element: updated ?? state.element });
         } else if (state.isExiting) {
-          result.push(state);
+          next.push(state);
         }
       });
 
-      // Add new children
+      // Handle Entries
       newChildren.forEach((child) => {
         const key = getChildKey(child);
         if (!currentKeys.has(key) && !prev.some((s) => s.key === key)) {
-          result.push({ key, element: child, isExiting: false });
+          next.push({ key, element: child, isExiting: false });
         }
       });
 
-      return result;
+      return next;
     });
-  }, [children, anim, childStates]);
+  }, [children, anim]);
 
-  // Animate entering elements
+  // Animate Entries
   useEffect(() => {
-    childStates.forEach((state) => {
-      if (!state.isExiting) {
+    childStates
+      .filter((s) => !s.isExiting)
+      .forEach((state) => {
         const el = refs.current.get(state.key);
-        if (el?.style.opacity === '0') {
-          anim.enter(el);
-        }
-      }
-    });
+        // Only animate if opacity is 0 (set by ref callback)
+        if (el && anim && gsap.getProperty(el, 'opacity') === 0) anim.enter(el);
+      });
   }, [childStates, anim]);
 
   return (
     <>
-      {childStates.map((state) =>
-        cloneElement(state.element, {
+      {childStates.map(({ key, element, isExiting }) =>
+        cloneElement(element, {
+          key,
           ref: (el: HTMLElement | null) => {
             if (el) {
-              refs.current.set(state.key, el);
-              gsap.set(el, { opacity: 0 });
+              refs.current.set(key, el);
+              if (!isExiting) gsap.set(el, { opacity: 0 });
             } else {
-              refs.current.delete(state.key);
+              refs.current.delete(key);
             }
           },
-          key: state.key,
           style: {
-            ...((state.element.props as Record<string, unknown>)['style'] as
-              | React.CSSProperties
-              | undefined),
-            pointerEvents: state.isExiting ? 'none' : undefined,
+            ...(element.props as React.HTMLAttributes<HTMLElement>).style,
+            pointerEvents: isExiting ? 'none' : undefined,
           },
         })
       )}
@@ -109,13 +98,9 @@ export const Presence: React.FC<PresenceProps> = ({ children, animation = 'fade'
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// AnimatedDiv - Pre-animated div with built-in enter/exit
-// ═══════════════════════════════════════════════════════════════════════════
-
 interface AnimatedDivProps extends React.HTMLAttributes<HTMLDivElement> {
-  enter?: { opacity?: number; y?: number; x?: number; scale?: number };
-  animate?: { opacity?: number; y?: number; x?: number; scale?: number };
+  enter?: gsap.TweenVars;
+  animate?: gsap.TweenVars;
   animDuration?: number;
   easing?: string;
 }
@@ -123,71 +108,54 @@ interface AnimatedDivProps extends React.HTMLAttributes<HTMLDivElement> {
 export const AnimatedDiv = React.forwardRef<HTMLDivElement, AnimatedDivProps>(
   (
     { enter, animate, animDuration = duration.normal, easing = ease.butter, children, ...props },
-    forwardedRef
+    ref
   ) => {
-    const innerRef = useRef<HTMLDivElement>(null);
-    const ref = forwardedRef ? (forwardedRef as React.RefObject<HTMLDivElement>) : innerRef;
+    const localRef = useRef<HTMLDivElement>(null);
+    const resolvedRef = (ref ?? localRef) as React.RefObject<HTMLDivElement>;
 
     useEffect(() => {
-      const el = ref.current;
-      if (!el) return;
-
-      if (enter) {
-        gsap.set(el, enter);
-        gsap.to(el, { ...animate, duration: animDuration, ease: easing });
-      } else if (animate) {
-        gsap.to(el, { ...animate, duration: animDuration, ease: easing });
-      }
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- only animate on mount
-    }, []);
+      if (!resolvedRef.current) return;
+      if (enter) gsap.set(resolvedRef.current, enter);
+      if (animate || enter)
+        gsap.to(resolvedRef.current, { ...animate, duration: animDuration, ease: easing });
+    }, [enter, animate, animDuration, easing, resolvedRef]);
 
     return (
-      <div ref={ref} {...props}>
+      <div ref={resolvedRef} {...props}>
         {children}
       </div>
     );
   }
 );
-
 AnimatedDiv.displayName = 'AnimatedDiv';
-
-// ═══════════════════════════════════════════════════════════════════════════
-// AnimatedButton - Button with built-in press animation
-// ═══════════════════════════════════════════════════════════════════════════
 
 interface AnimatedButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   scale?: number;
 }
 
 export const AnimatedButton = React.forwardRef<HTMLButtonElement, AnimatedButtonProps>(
-  ({ scale = 0.92, children, onMouseDown, onMouseUp, onMouseLeave, ...props }, forwardedRef) => {
-    const innerRef = useRef<HTMLButtonElement>(null);
-    const ref = forwardedRef ? (forwardedRef as React.RefObject<HTMLButtonElement>) : innerRef;
+  ({ scale = 0.92, children, onMouseDown, onMouseUp, onMouseLeave, ...props }, ref) => {
+    const localRef = useRef<HTMLButtonElement>(null);
+    const resolvedRef = (ref ?? localRef) as React.RefObject<HTMLButtonElement>;
 
-    const handleMouseDown = (e: React.MouseEvent<HTMLButtonElement>) => {
-      const el = ref.current;
-      if (el) gsap.to(el, { scale, duration: 0.1, ease: ease.snap });
-      onMouseDown?.(e);
-    };
-
-    const handleMouseUp = (e: React.MouseEvent<HTMLButtonElement>) => {
-      const el = ref.current;
-      if (el) gsap.to(el, { scale: 1, duration: 0.2, ease: ease.bounce });
-      onMouseUp?.(e);
-    };
-
-    const handleMouseLeave = (e: React.MouseEvent<HTMLButtonElement>) => {
-      const el = ref.current;
-      if (el) gsap.to(el, { scale: 1, duration: 0.15, ease: ease.butter });
-      onMouseLeave?.(e);
-    };
+    const animateBtn = (s: number, d: number, e: string) =>
+      resolvedRef.current && gsap.to(resolvedRef.current, { scale: s, duration: d, ease: e });
 
     return (
       <button
-        ref={ref}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseLeave={handleMouseLeave}
+        ref={resolvedRef}
+        onMouseDown={(e) => {
+          animateBtn(scale, 0.1, ease.snap);
+          onMouseDown?.(e);
+        }}
+        onMouseUp={(e) => {
+          animateBtn(1, 0.2, ease.bounce);
+          onMouseUp?.(e);
+        }}
+        onMouseLeave={(e) => {
+          animateBtn(1, 0.15, ease.butter);
+          onMouseLeave?.(e);
+        }}
         {...props}
       >
         {children}
@@ -195,5 +163,4 @@ export const AnimatedButton = React.forwardRef<HTMLButtonElement, AnimatedButton
     );
   }
 );
-
 AnimatedButton.displayName = 'AnimatedButton';

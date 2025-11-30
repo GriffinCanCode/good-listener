@@ -1,40 +1,31 @@
 import gsap from 'gsap';
 import { Mic, Volume2 } from 'lucide-react';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { duration, ease } from '../lib/animations';
+import React, { useEffect, useRef, useState } from 'react';
+import { breathe, duration, ease } from '../lib/animations';
 import { useChatStore } from '../store/useChatStore';
 
 const BAR_COUNT = 5;
 const DECAY_MS = 150;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Audio Bar - Individual bar with spring-like animation
-// ═══════════════════════════════════════════════════════════════════════════
-
-interface AudioBarProps {
+const AudioBar: React.FC<{
   probability: number;
   index: number;
   isActive: boolean;
   color: string;
-}
-
-const AudioBar: React.FC<AudioBarProps> = ({ probability, index, isActive, color }) => {
+}> = ({ probability, index, isActive, color }) => {
   const ref = useRef<HTMLDivElement>(null);
   const offset = (index - Math.floor(BAR_COUNT / 2)) * 0.12;
   const adjusted = Math.max(0, Math.min(1, probability + offset * (probability > 0.3 ? 1 : 0)));
   const targetHeight = isActive ? adjusted : 0;
 
   useEffect(() => {
-    if (ref.current) {
-      const scaleY = 0.3 + targetHeight * 0.7;
-      const opacity = 0.3 + targetHeight * 0.7;
-      gsap.to(ref.current, {
-        scaleY,
-        opacity,
-        duration: 0.12,
-        ease: 'power2.out',
-      });
-    }
+    if (!ref.current) return;
+    gsap.to(ref.current, {
+      scaleY: 0.3 + targetHeight * 0.7,
+      opacity: 0.3 + targetHeight * 0.7,
+      duration: 0.12,
+      ease: 'power2.out',
+    });
   }, [targetHeight]);
 
   return (
@@ -50,53 +41,26 @@ const AudioBar: React.FC<AudioBarProps> = ({ probability, index, isActive, color
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Channel Indicator - User or System audio channel
-// ═══════════════════════════════════════════════════════════════════════════
-
-interface ChannelIndicatorProps {
+const ChannelIndicator: React.FC<{
   source: 'user' | 'system';
   probability: number;
   isSpeech: boolean;
   label: string;
   icon: React.ReactNode;
-}
-
-const ChannelIndicator: React.FC<ChannelIndicatorProps> = ({
-  source,
-  probability,
-  isSpeech,
-  label,
-  icon,
-}) => {
+}> = ({ source, probability, isSpeech, label, icon }) => {
   const color = source === 'user' ? 'var(--accent-primary)' : 'var(--success)';
   const glowColor = source === 'user' ? 'var(--accent-glow)' : 'var(--success-glow)';
-
   const iconRef = useRef<HTMLDivElement>(null);
   const probRef = useRef<HTMLDivElement>(null);
   const breatheAnimRef = useRef<gsap.core.Tween | null>(null);
-  const barHeights = useMemo(() => Array.from({ length: BAR_COUNT }, (_, i) => i), []);
 
-  // Breathing icon animation when speaking
   useEffect(() => {
     if (isSpeech && iconRef.current) {
-      breatheAnimRef.current = gsap.to(iconRef.current, {
-        scale: 1.15,
-        filter: `drop-shadow(0 0 6px ${glowColor})`,
-        duration: 0.3,
-        ease: ease.float,
-        repeat: -1,
-        yoyo: true,
-      });
+      breatheAnimRef.current = breathe(iconRef.current, { glowColor });
     } else {
       breatheAnimRef.current?.kill();
       if (iconRef.current) {
-        gsap.to(iconRef.current, {
-          scale: 1,
-          filter: 'none',
-          duration: 0.2,
-          ease: ease.butter,
-        });
+        gsap.to(iconRef.current, { scale: 1, filter: 'none', duration: 0.2, ease: ease.butter });
       }
     }
     return () => {
@@ -104,7 +68,6 @@ const ChannelIndicator: React.FC<ChannelIndicatorProps> = ({
     };
   }, [isSpeech, glowColor]);
 
-  // Probability display opacity
   useEffect(() => {
     if (probRef.current) {
       gsap.to(probRef.current, {
@@ -124,7 +87,7 @@ const ChannelIndicator: React.FC<ChannelIndicatorProps> = ({
         <span className="vad-label">{label}</span>
       </div>
       <div className="vad-bars">
-        {barHeights.map((i) => (
+        {Array.from({ length: BAR_COUNT }).map((_, i) => (
           <AudioBar key={i} index={i} probability={probability} isActive={isSpeech} color={color} />
         ))}
       </div>
@@ -135,79 +98,84 @@ const ChannelIndicator: React.FC<ChannelIndicatorProps> = ({
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Voice Activity Indicator - Main component
-// ═══════════════════════════════════════════════════════════════════════════
-
 export const VoiceActivityIndicator: React.FC = () => {
-  const vad = useChatStore((s) => s.vad);
-  const status = useChatStore((s) => s.status);
-  const ref = useRef<HTMLDivElement>(null);
+  const { vad, status } = useChatStore();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const isConnected = status === 'connected';
 
-  // Decay old values if no new data
-  const [userProb, setUserProb] = useState(0);
-  const [systemProb, setSystemProb] = useState(0);
-  const [userSpeech, setUserSpeech] = useState(false);
-  const [systemSpeech, setSystemSpeech] = useState(false);
+  const useVadDecay = (source: 'user' | 'system') => {
+    const [prob, setProb] = useState(0);
+    const [speech, setSpeech] = useState(false);
+    const data = vad[source];
 
-  useEffect(() => {
-    if (vad.user) {
-      setUserProb(vad.user.probability);
-      setUserSpeech(vad.user.isSpeech);
-    }
-    const decay = setTimeout(() => {
-      if (!vad.user || Date.now() - vad.user.timestamp > DECAY_MS) {
-        setUserProb((p) => p * 0.85);
-        if (!vad.user?.isSpeech) setUserSpeech(false);
+    useEffect(() => {
+      if (data) {
+        setProb(data.probability);
+        setSpeech(data.isSpeech);
       }
-    }, DECAY_MS);
-    return () => clearTimeout(decay);
-  }, [vad.user]);
+      const timer = setTimeout(() => {
+        if (!data || Date.now() - data.timestamp > DECAY_MS) {
+          setProb((p) => p * 0.85);
+          if (!data?.isSpeech) setSpeech(false);
+        }
+      }, DECAY_MS);
+      return () => clearTimeout(timer);
+    }, [data]);
+
+    return { prob, speech };
+  };
+
+  const user = useVadDecay('user');
+  const system = useVadDecay('system');
+
+  // Initial setup to prevent flash
+  useEffect(() => {
+    if (containerRef.current && !isConnected) {
+      gsap.set(containerRef.current, { height: 0, opacity: 0, marginTop: 0 });
+    }
+  }, []);
 
   useEffect(() => {
-    if (vad.system) {
-      setSystemProb(vad.system.probability);
-      setSystemSpeech(vad.system.isSpeech);
-    }
-    const decay = setTimeout(() => {
-      if (!vad.system || Date.now() - vad.system.timestamp > DECAY_MS) {
-        setSystemProb((p) => p * 0.85);
-        if (!vad.system?.isSpeech) setSystemSpeech(false);
-      }
-    }, DECAY_MS);
-    return () => clearTimeout(decay);
-  }, [vad.system]);
+    if (!containerRef.current) return;
 
-  // Enter animation
-  useEffect(() => {
-    if (ref.current && status === 'connected') {
-      gsap.fromTo(
-        ref.current,
-        { opacity: 0, y: 10 },
-        { opacity: 1, y: 0, duration: duration.normal, ease: ease.butter }
-      );
+    if (isConnected) {
+      gsap.to(containerRef.current, {
+        height: 'auto',
+        marginTop: 16,
+        opacity: 1,
+        duration: duration.normal,
+        ease: ease.butter,
+      });
+    } else {
+      gsap.to(containerRef.current, {
+        height: 0,
+        marginTop: 0,
+        opacity: 0,
+        duration: duration.fast,
+        ease: ease.butter,
+      });
     }
-  }, [status]);
-
-  if (status !== 'connected') return null;
+  }, [isConnected]);
 
   return (
-    <div ref={ref} className="vad-indicator">
-      <ChannelIndicator
-        source="user"
-        probability={userProb}
-        isSpeech={userSpeech}
-        label="You"
-        icon={<Mic size={14} />}
-      />
-      <div className="vad-divider" />
-      <ChannelIndicator
-        source="system"
-        probability={systemProb}
-        isSpeech={systemSpeech}
-        label="System"
-        icon={<Volume2 size={14} />}
-      />
+    <div ref={containerRef} style={{ overflow: 'hidden' }} className="vad-wrapper">
+      <div className="vad-indicator" style={{ margin: 0 }}>
+        <ChannelIndicator
+          source="user"
+          probability={user.prob}
+          isSpeech={user.speech}
+          label="You"
+          icon={<Mic size={14} />}
+        />
+        <div className="vad-divider" />
+        <ChannelIndicator
+          source="system"
+          probability={system.prob}
+          isSpeech={system.speech}
+          label="System"
+          icon={<Volume2 size={14} />}
+        />
+      </div>
     </div>
   );
 };

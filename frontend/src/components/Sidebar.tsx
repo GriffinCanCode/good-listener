@@ -1,7 +1,6 @@
-import gsap from 'gsap';
 import { MessageSquare, Plus, Trash2, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
-import { duration, ease } from '../lib/animations';
+import { duration, ease, fadeIn, fadeOut, slideIn, slideOut } from '../lib/animations';
 import { useChatStore } from '../store/useChatStore';
 import { useUIStore } from '../store/useUIStore';
 
@@ -14,37 +13,22 @@ export const Sidebar: React.FC = () => {
   const backdropRef = useRef<HTMLDivElement>(null);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
-  // Handle enter/exit animations
   useEffect(() => {
     if (isSidebarOpen) {
       setShouldRender(true);
       requestAnimationFrame(() => {
-        if (backdropRef.current) {
-          gsap.fromTo(
-            backdropRef.current,
-            { opacity: 0 },
-            { opacity: 1, duration: duration.fast, ease: ease.silk }
-          );
-        }
-        if (sidebarRef.current) {
-          gsap.fromTo(
-            sidebarRef.current,
-            { x: '-100%' },
-            { x: 0, duration: duration.smooth, ease: ease.butter }
-          );
-        }
+        fadeIn(backdropRef.current, { duration: duration.fast, ease: ease.silk });
+        slideIn(sidebarRef.current, 'left', { duration: duration.smooth, ease: ease.butter });
       });
     } else if (shouldRender) {
-      const tl = gsap.timeline({
-        onComplete: () => setShouldRender(false),
+      const onComplete = () => setShouldRender(false);
+      // Trigger both, one controls the completion
+      fadeOut(backdropRef.current, { duration: duration.fast, ease: ease.silk });
+      slideOut(sidebarRef.current, 'left', {
+        duration: duration.fast,
+        ease: ease.sharp,
+        onComplete,
       });
-
-      if (sidebarRef.current) {
-        tl.to(sidebarRef.current, { x: '-100%', duration: duration.fast, ease: ease.sharp }, 0);
-      }
-      if (backdropRef.current) {
-        tl.to(backdropRef.current, { opacity: 0, duration: duration.fast, ease: ease.silk }, 0);
-      }
     }
   }, [isSidebarOpen, shouldRender]);
 
@@ -57,15 +41,12 @@ export const Sidebar: React.FC = () => {
 
   return (
     <>
-      {/* Backdrop */}
       <div
         ref={backdropRef}
         onClick={() => setSidebarOpen(false)}
         className="sidebar-backdrop"
         style={{ opacity: 0 }}
       />
-
-      {/* Sidebar */}
       <div ref={sidebarRef} className="sidebar" style={{ transform: 'translateX(-100%)' }}>
         <div className="sidebar-header">
           <h2>History</h2>

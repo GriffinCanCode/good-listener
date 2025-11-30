@@ -1,33 +1,26 @@
 /**
- * GSAP Animation Utilities - Bespoke smooth transitions
- * Custom easing curves and animation presets for silky interactions
+ * GSAP Animation Utilities
+ * Custom easing curves and animation presets for bespoke, smooth transitions.
  */
 
 import gsap from 'gsap';
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Custom Easing Curves - Buttery smooth, natural motion
+// Custom Easing Curves - Bespoke and Smooth
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const ease = {
-  // Silk - smooth deceleration with gentle overshoot
-  silk: 'power2.out',
-  // Butter - ultra-smooth with subtle spring feel
-  butter: 'power3.out',
-  // Glide - natural ease for entrances
-  glide: 'power2.inOut',
-  // Snap - quick, responsive micro-interactions
-  snap: 'power4.out',
-  // Float - dreamy, slow ease for ambient elements
-  float: 'sine.inOut',
-  // Bounce - playful with dampened spring
-  bounce: 'back.out(1.2)',
-  // Sharp - crisp exits
-  sharp: 'power3.in',
+  silk: 'cubic-bezier(0.22, 1, 0.36, 1)', // Smooth, elegant deceleration
+  butter: 'cubic-bezier(0.16, 1, 0.3, 1)', // Organic, slight springy feel
+  glide: 'cubic-bezier(0.65, 0, 0.35, 1)', // Gentle entrance/exit
+  snap: 'cubic-bezier(0.11, 0, 0.5, 0)', // Quick, responsive
+  float: 'sine.inOut', // Floating ambient
+  bounce: 'back.out(1.7)', // Playful
+  sharp: 'cubic-bezier(0.11, 0, 0.5, 0)', // Sharp exit
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Duration Presets (in seconds)
+// Duration Presets
 // ═══════════════════════════════════════════════════════════════════════════
 
 export const duration = {
@@ -40,332 +33,201 @@ export const duration = {
 } as const;
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Animation Presets - Ready-to-use animations
+// Animation Primitives & Helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
-export interface AnimationConfig {
+export interface AnimConfig {
   duration?: number;
   ease?: string;
   delay?: number;
-  onComplete?: () => void;
+  onComplete?: gsap.Callback;
 }
 
-/** Fade in with optional vertical slide */
+const animate = (el: Element | null, from: gsap.TweenVars, to: gsap.TweenVars) =>
+  el ? gsap.fromTo(el, from, to) : null;
+
 export const fadeIn = (
   el: Element | null,
-  config: AnimationConfig & { y?: number; scale?: number } = {}
-) => {
-  if (!el) return null;
-  const {
+  {
     y = 0,
     scale = 1,
     duration: d = duration.normal,
     ease: e = ease.butter,
     delay = 0,
-    onComplete,
-  } = config;
+    ...config
+  }: AnimConfig & { y?: number; scale?: number } = {}
+) =>
+  animate(
+    el,
+    { opacity: 0, y, scale },
+    { opacity: 1, y: 0, scale: 1, duration: d, ease: e, delay, ...config }
+  );
 
-  const tweenVars: gsap.TweenVars = { opacity: 1, y: 0, scale: 1, duration: d, ease: e, delay };
-  if (onComplete) tweenVars.onComplete = onComplete;
-
-  return gsap.fromTo(el, { opacity: 0, y, scale }, tweenVars);
-};
-
-/** Fade out with optional vertical slide */
 export const fadeOut = (
   el: Element | null,
-  config: AnimationConfig & { y?: number; scale?: number } = {}
-) => {
-  if (!el) return null;
-  const {
+  {
     y = 0,
     scale = 1,
     duration: d = duration.fast,
     ease: e = ease.sharp,
     delay = 0,
-    onComplete,
-  } = config;
+    ...config
+  }: AnimConfig & { y?: number; scale?: number } = {}
+) => (el ? gsap.to(el, { opacity: 0, y, scale, duration: d, ease: e, delay, ...config }) : null);
 
-  const tweenVars: gsap.TweenVars = { opacity: 0, y, scale, duration: d, ease: e, delay };
-  if (onComplete) tweenVars.onComplete = onComplete;
-
-  return gsap.to(el, tweenVars);
-};
-
-/** Slide in from direction */
 export const slideIn = (
   el: Element | null,
   from: 'left' | 'right' | 'top' | 'bottom',
-  config: AnimationConfig = {}
+  config: AnimConfig = {}
 ) => {
-  if (!el) return null;
-  const { duration: d = duration.smooth, ease: e = ease.butter, delay = 0, onComplete } = config;
-
   const offsets = {
-    left: { x: '-100%', y: 0 },
-    right: { x: '100%', y: 0 },
-    top: { x: 0, y: '-100%' },
-    bottom: { x: 0, y: '100%' },
+    left: { x: '-100%' },
+    right: { x: '100%' },
+    top: { y: '-100%' },
+    bottom: { y: '100%' },
   };
-
-  const tweenVars: gsap.TweenVars = { x: 0, y: 0, opacity: 1, duration: d, ease: e, delay };
-  if (onComplete) tweenVars.onComplete = onComplete;
-
-  return gsap.fromTo(el, { ...offsets[from], opacity: 0 }, tweenVars);
+  return animate(
+    el,
+    { ...offsets[from], opacity: 0 },
+    { x: 0, y: 0, opacity: 1, duration: duration.smooth, ease: ease.butter, ...config }
+  );
 };
 
-/** Slide out to direction */
 export const slideOut = (
   el: Element | null,
   to: 'left' | 'right' | 'top' | 'bottom',
-  config: AnimationConfig = {}
+  config: AnimConfig = {}
 ) => {
-  if (!el) return null;
-  const { duration: d = duration.fast, ease: e = ease.sharp, delay = 0, onComplete } = config;
-
   const offsets = {
-    left: { x: '-100%', y: 0 },
-    right: { x: '100%', y: 0 },
-    top: { x: 0, y: '-100%' },
-    bottom: { x: 0, y: '100%' },
+    left: { x: '-100%' },
+    right: { x: '100%' },
+    top: { y: '-100%' },
+    bottom: { y: '100%' },
   };
-
-  const tweenVars: gsap.TweenVars = { ...offsets[to], opacity: 0, duration: d, ease: e, delay };
-  if (onComplete) tweenVars.onComplete = onComplete;
-
-  return gsap.to(el, tweenVars);
+  return el
+    ? gsap.to(el, {
+        ...offsets[to],
+        opacity: 0,
+        duration: duration.fast,
+        ease: ease.sharp,
+        ...config,
+      })
+    : null;
 };
 
-/** Scale with fade - perfect for cards/modals */
-export const scaleIn = (el: Element | null, config: AnimationConfig & { from?: number } = {}) => {
-  if (!el) return null;
-  const {
+export const scaleIn = (
+  el: Element | null,
+  {
     from = 0.95,
+    y = 0,
     duration: d = duration.normal,
     ease: e = ease.bounce,
-    delay = 0,
-    onComplete,
-  } = config;
+    ...rest
+  }: AnimConfig & { from?: number; y?: number } = {}
+) =>
+  animate(
+    el,
+    { opacity: 0, scale: from, y },
+    { opacity: 1, scale: 1, y: 0, duration: d, ease: e, ...rest }
+  );
 
-  const tweenVars: gsap.TweenVars = { opacity: 1, scale: 1, duration: d, ease: e, delay };
-  if (onComplete) tweenVars.onComplete = onComplete;
-
-  return gsap.fromTo(el, { opacity: 0, scale: from }, tweenVars);
-};
-
-/** Scale out with fade */
-export const scaleOut = (el: Element | null, config: AnimationConfig & { to?: number } = {}) => {
-  if (!el) return null;
-  const {
+export const scaleOut = (
+  el: Element | null,
+  {
     to = 0.95,
     duration: d = duration.fast,
     ease: e = ease.sharp,
-    delay = 0,
-    onComplete,
-  } = config;
+    ...rest
+  }: AnimConfig & { to?: number } = {}
+) => (el ? gsap.to(el, { opacity: 0, scale: to, duration: d, ease: e, ...rest }) : null);
 
-  const tweenVars: gsap.TweenVars = { opacity: 0, scale: to, duration: d, ease: e, delay };
-  if (onComplete) tweenVars.onComplete = onComplete;
-
-  return gsap.to(el, tweenVars);
-};
-
-/** Pulse effect - subtle attention grabber */
-export const pulse = (el: Element | null, config: { scale?: number; count?: number } = {}) => {
-  if (!el) return null;
-  const { scale = 1.05, count = 2 } = config;
-
-  return gsap.to(el, {
-    scale,
-    duration: 0.15,
-    ease: ease.snap,
-    repeat: count * 2 - 1,
-    yoyo: true,
-  });
-};
-
-/** Press effect for buttons */
-export const press = (el: Element | null) => {
-  if (!el) return null;
-  return gsap.to(el, { scale: 0.92, duration: duration.instant, ease: ease.snap });
-};
-
-/** Release effect for buttons */
-export const release = (el: Element | null) => {
-  if (!el) return null;
-  return gsap.to(el, { scale: 1, duration: duration.fast, ease: ease.bounce });
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Spring Animation - Custom spring physics
-// ═══════════════════════════════════════════════════════════════════════════
-
-export interface SpringConfig {
-  stiffness?: number;
-  damping?: number;
-  mass?: number;
-}
-
-/** Animated spring value controller */
-export class SpringValue {
-  private value: number;
-  private target: number;
-  private velocity = 0;
-  private stiffness: number;
-  private damping: number;
-  private mass: number;
-  private raf: number | null = null;
-  private onChange: (value: number) => void;
-
-  constructor(initialValue: number, onChange: (value: number) => void, config: SpringConfig = {}) {
-    this.value = initialValue;
-    this.target = initialValue;
-    this.onChange = onChange;
-    this.stiffness = config.stiffness ?? 300;
-    this.damping = config.damping ?? 15;
-    this.mass = config.mass ?? 0.5;
-  }
-
-  set(newTarget: number) {
-    this.target = newTarget;
-    if (!this.raf) this.tick();
-  }
-
-  private tick = () => {
-    const dt = 1 / 60;
-    const spring = (this.target - this.value) * this.stiffness;
-    const damper = -this.velocity * this.damping;
-    const acceleration = (spring + damper) / this.mass;
-
-    this.velocity += acceleration * dt;
-    this.value += this.velocity * dt;
-
-    this.onChange(this.value);
-
-    // Continue if not settled
-    if (Math.abs(this.velocity) > 0.001 || Math.abs(this.target - this.value) > 0.001) {
-      this.raf = requestAnimationFrame(this.tick);
-    } else {
-      this.value = this.target;
-      this.onChange(this.value);
-      this.raf = null;
-    }
-  };
-
-  destroy() {
-    if (this.raf) cancelAnimationFrame(this.raf);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Stagger Animations - For lists and groups
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Staggered fade in for lists */
 export const staggerIn = (
   elements: Element[] | NodeListOf<Element>,
-  config: AnimationConfig & { stagger?: number; y?: number } = {}
-) => {
-  const {
+  {
     stagger = 0.05,
     y = 12,
     duration: d = duration.normal,
     ease: e = ease.butter,
     delay = 0,
-  } = config;
-
-  return gsap.fromTo(
+    ...config
+  }: AnimConfig & { stagger?: number; y?: number } = {}
+) =>
+  gsap.fromTo(
     elements,
     { opacity: 0, y },
-    { opacity: 1, y: 0, duration: d, ease: e, stagger, delay }
+    { opacity: 1, y: 0, duration: d, ease: e, stagger, delay, ...config }
   );
-};
-
-/** Staggered fade out */
-export const staggerOut = (
-  elements: Element[] | NodeListOf<Element>,
-  config: AnimationConfig & { stagger?: number; y?: number } = {}
-) => {
-  const {
-    stagger = 0.03,
-    y = -8,
-    duration: d = duration.fast,
-    ease: e = ease.sharp,
-    delay = 0,
-  } = config;
-
-  return gsap.to(elements, { opacity: 0, y, duration: d, ease: e, stagger, delay });
-};
 
 // ═══════════════════════════════════════════════════════════════════════════
-// Presence Animation Manager - Handles mount/unmount animations
+// Interaction Effects
+// ═══════════════════════════════════════════════════════════════════════════
+
+export const press = (el: Element | null) =>
+  el && gsap.to(el, { scale: 0.96, duration: 0.1, ease: 'power1.out' });
+export const release = (el: Element | null) =>
+  el && gsap.to(el, { scale: 1, duration: 0.3, ease: 'back.out(1.7)' });
+
+export const breathe = (
+  el: Element | null,
+  {
+    scale = 1.15,
+    duration: d = 0.3,
+    glowColor,
+  }: { scale?: number; duration?: number; glowColor?: string } = {}
+) =>
+  el
+    ? gsap.to(el, {
+        scale,
+        ...(glowColor ? { filter: `drop-shadow(0 0 6px ${glowColor})` } : {}),
+        duration: d,
+        ease: ease.float,
+        repeat: -1,
+        yoyo: true,
+      })
+    : null;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Presence Config
 // ═══════════════════════════════════════════════════════════════════════════
 
 export interface PresenceAnimation {
-  enter: (el: Element) => gsap.core.Tween | gsap.core.Timeline;
-  exit: (el: Element, onComplete: () => void) => gsap.core.Tween | gsap.core.Timeline;
+  enter: (el: Element) => gsap.core.Tween | gsap.core.Timeline | null;
+  exit: (el: Element, onComplete: () => void) => gsap.core.Tween | gsap.core.Timeline | null;
 }
 
-/** Pre-built presence animation presets */
-export const presenceAnimations = {
+export const presenceAnimations: Record<string, PresenceAnimation> = {
   fade: {
-    enter: (el: Element) =>
-      fadeIn(el, { duration: duration.normal }) ?? gsap.set(el, { opacity: 1 }),
-    exit: (el: Element, onComplete: () => void) =>
-      fadeOut(el, { onComplete }) ?? gsap.set(el, { opacity: 0 }),
+    enter: (el) => fadeIn(el, { duration: duration.normal }),
+    exit: (el, onComplete) => fadeOut(el, { onComplete }),
   },
-
   slideUp: {
-    enter: (el: Element) =>
-      fadeIn(el, { y: 20, duration: duration.normal }) ?? gsap.set(el, { opacity: 1 }),
-    exit: (el: Element, onComplete: () => void) =>
-      fadeOut(el, { y: -10, onComplete }) ?? gsap.set(el, { opacity: 0 }),
+    enter: (el) => fadeIn(el, { y: 20, duration: duration.normal }),
+    exit: (el, onComplete) => fadeOut(el, { y: -10, onComplete }),
   },
-
   slideDown: {
-    enter: (el: Element) =>
-      fadeIn(el, { y: -20, duration: duration.normal }) ?? gsap.set(el, { opacity: 1 }),
-    exit: (el: Element, onComplete: () => void) =>
-      fadeOut(el, { y: 10, onComplete }) ?? gsap.set(el, { opacity: 0 }),
+    enter: (el) => fadeIn(el, { y: -20, duration: duration.normal }),
+    exit: (el, onComplete) => fadeOut(el, { y: 10, onComplete }),
   },
-
   slideLeft: {
-    enter: (el: Element) =>
-      gsap.fromTo(
-        el,
-        { x: 20, opacity: 0 },
-        { x: 0, opacity: 1, duration: duration.smooth, ease: ease.butter }
-      ),
-    exit: (el: Element, onComplete: () => void) =>
-      gsap.to(el, { x: 20, opacity: 0, duration: duration.fast, ease: ease.sharp, onComplete }),
+    enter: (el) => slideIn(el, 'left'),
+    exit: (el, onComplete) => slideOut(el, 'left', { onComplete }),
   },
-
   slideRight: {
-    enter: (el: Element) =>
-      gsap.fromTo(
-        el,
-        { x: -20, opacity: 0 },
-        { x: 0, opacity: 1, duration: duration.smooth, ease: ease.butter }
-      ),
-    exit: (el: Element, onComplete: () => void) =>
-      gsap.to(el, { x: -20, opacity: 0, duration: duration.fast, ease: ease.sharp, onComplete }),
+    enter: (el) => slideIn(el, 'right'),
+    exit: (el, onComplete) => slideOut(el, 'right', { onComplete }),
   },
-
   scale: {
-    enter: (el: Element) =>
-      scaleIn(el, { from: 0.95, duration: duration.normal }) ?? gsap.set(el, { opacity: 1 }),
-    exit: (el: Element, onComplete: () => void) =>
-      scaleOut(el, { to: 0.95, onComplete }) ?? gsap.set(el, { opacity: 0 }),
+    enter: (el) => scaleIn(el, { from: 0.95 }),
+    exit: (el, onComplete) => scaleOut(el, { to: 0.95, onComplete }),
   },
-
   scaleUp: {
-    enter: (el: Element) =>
+    enter: (el) =>
       gsap.fromTo(
         el,
         { scale: 0.95, y: -20, opacity: 0 },
         { scale: 1, y: 0, opacity: 1, duration: duration.normal, ease: ease.bounce }
       ),
-    exit: (el: Element, onComplete: () => void) =>
+    exit: (el, onComplete) =>
       gsap.to(el, {
         scale: 0.95,
         y: -10,
@@ -375,78 +237,23 @@ export const presenceAnimations = {
         onComplete,
       }),
   },
-
   sidebar: {
-    enter: (el: Element) =>
+    enter: (el) =>
       gsap.fromTo(el, { x: '-100%' }, { x: 0, duration: duration.smooth, ease: ease.butter }),
-    exit: (el: Element, onComplete: () => void) =>
+    exit: (el, onComplete) =>
       gsap.to(el, { x: '-100%', duration: duration.fast, ease: ease.sharp, onComplete }),
   },
-
   backdrop: {
-    enter: (el: Element) =>
+    enter: (el) =>
       gsap.fromTo(el, { opacity: 0 }, { opacity: 1, duration: duration.fast, ease: ease.silk }),
-    exit: (el: Element, onComplete: () => void) =>
+    exit: (el, onComplete) =>
       gsap.to(el, { opacity: 0, duration: duration.fast, ease: ease.silk, onComplete }),
   },
-} as const;
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Continuous Animations - Loops and ambient effects
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Pulsing ring animation (like mic connecting) */
-export const pulseRing = (el: Element | null) => {
-  if (!el) return null;
-  return gsap.fromTo(
-    el,
-    { scale: 0.8, opacity: 0.6 },
-    { scale: 1.8, opacity: 0, duration: 1.2, ease: ease.silk, repeat: -1 }
-  );
 };
 
-/** Icon breathing/pulsing effect */
-export const breathe = (el: Element | null, config: { scale?: number; duration?: number } = {}) => {
-  if (!el) return null;
-  const { scale = 1.15, duration: d = 0.3 } = config;
-
-  return gsap.to(el, {
-    scale,
-    duration: d,
-    ease: ease.float,
-    repeat: -1,
-    yoyo: true,
-  });
-};
-
-/** Audio bar animation */
-export const audioBar = (el: Element | null, targetHeight: number, config: SpringConfig = {}) => {
-  if (!el) return null;
-  const { stiffness = 300, damping = 15 } = config;
-
-  // Convert spring physics to GSAP timing
-  const springDuration = Math.sqrt(1 / stiffness) * damping * 0.1;
-
-  return gsap.to(el, {
-    scaleY: targetHeight,
-    duration: springDuration,
-    ease: 'power2.out',
-  });
-};
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Utility Functions
-// ═══════════════════════════════════════════════════════════════════════════
-
-/** Kill all animations on an element */
-export const killAnimations = (el: Element | null) => {
-  if (el) gsap.killTweensOf(el);
-};
-
-/** Set element to specific state (no animation) */
-export const set = (el: Element | null, props: gsap.TweenVars) => {
-  if (el) gsap.set(el, props);
-};
-
-/** Create a timeline for complex sequences */
-export const timeline = (config?: gsap.TimelineVars) => gsap.timeline(config);
+// Legacy Spring Config (kept for compatibility if needed, though SpringValue class removed)
+export interface SpringConfig {
+  stiffness?: number;
+  damping?: number;
+  mass?: number;
+}
