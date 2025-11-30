@@ -8,17 +8,26 @@ from app.services.analysis import AnalysisService
 from app.services.audio import AudioService
 from app.services.llm import LLMService
 from app.services.memory import MemoryService
+from app.services.prompts import get_monitor_prompt
 
 logger = logging.getLogger(__name__)
 
 class BackgroundMonitor:
-    def __init__(self):
-        self.capture_service = CaptureService()
-        self.ocr_service = OCRService()
-        self.analysis_service = AnalysisService()
-        self.audio_service = AudioService() 
-        self.memory_service = MemoryService()
-        self.llm_service = LLMService(provider="gemini", model_name="gemini-2.0-flash", memory_service=self.memory_service)
+    def __init__(
+        self,
+        capture_service: CaptureService,
+        ocr_service: OCRService,
+        analysis_service: AnalysisService,
+        audio_service: AudioService,
+        memory_service: MemoryService,
+        llm_service: LLMService,
+    ):
+        self.capture_service = capture_service
+        self.ocr_service = ocr_service
+        self.analysis_service = analysis_service
+        self.audio_service = audio_service
+        self.memory_service = memory_service
+        self.llm_service = llm_service
         
         self._running = False
         self._is_recording = True # Controls writing to vector DB
@@ -79,13 +88,7 @@ class BackgroundMonitor:
             self.memory_service.add_memory(text, "audio")
         
         screen_ctx = self.latest_text[:500] if self.latest_text else "No readable text."
-        prompt = f"""User conversation:
-Transcript: "{text}"
-Screen Context: "{screen_ctx}"
-
-If this is a question/lookup about the screen, answer it.
-If the screen is empty but asked about, describe visuals.
-If just chatter, reply "NO_RESPONSE"."""
+        prompt = get_monitor_prompt(text, screen_ctx)
         
         response = ""
         async for chunk in self.llm_service.analyze(self.latest_text, prompt, self.latest_image):

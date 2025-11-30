@@ -7,6 +7,7 @@ from typing import AsyncGenerator, Optional
 from PIL import Image
 import io
 import base64
+from app.services.prompts import get_analysis_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -30,20 +31,10 @@ class LLMService:
     async def analyze(self, context_text: str, user_query: str = "", image: Optional[Image.Image] = None) -> AsyncGenerator[str, None]:
         memory_context = ""
         if self.memory_service and user_query:
-            memories = self.memory_service.query_memory(user_query, n_results=3)
-            if memories:
-                memory_context = "\nRelevant Past Context:\n" + "\n".join([f"- {m}" for m in memories])
+            if memories := self.memory_service.query_memory(user_query, n_results=3):
+                memory_context = "\nRelevant Past Context:\n" + "\n".join(f"- {m}" for m in memories)
 
-        prompt = f"""
-        Context from screen (OCR) with bounding boxes [x1, y1, x2, y2]:
-        {context_text[:5000] if context_text else "No text detected via OCR."} 
-        
-        {memory_context}
-        
-        User Query: {user_query if user_query else "Analyze this screen."}
-        
-        Please provide a concise, helpful response. Use the spatial coordinates to understand the layout.
-        """
+        prompt = get_analysis_prompt(context_text, memory_context, user_query)
 
         if self.provider == "gemini":
             async for chunk in self._call_gemini(prompt, image):
