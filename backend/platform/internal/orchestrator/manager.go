@@ -122,14 +122,51 @@ func (m *Manager) handleSpeech(ctx context.Context, samples []float32, source st
 	}
 
 	// Check for auto-answer on system audio
-	if source == "system" {
-		m.autoAnswer.Check(ctx, text)
+	if source == "system" && m.autoAnswer.Check(ctx, text) {
+		go m.streamAutoAnswer(ctx, text)
 	}
 }
 
 // TranscriptEvents returns channel for transcript events
 func (m *Manager) TranscriptEvents() <-chan TranscriptEvent {
 	return m.transcripts.Events()
+}
+
+// AutoAnswerEvents returns channel for auto-answer events
+func (m *Manager) AutoAnswerEvents() <-chan AutoAnswerEvent {
+	return m.autoAnswerChan
+}
+
+// streamAutoAnswer generates and streams an LLM response for a detected question
+func (m *Manager) streamAutoAnswer(ctx context.Context, question string) {
+	ctx, span := trace.StartSpan(ctx, "stream_auto_answer")
+	defer span.End()
+	span.SetAttr("question", question)
+
+	log := trace.Logger(ctx)
+	log.Info("auto-answering question", "question", question)
+
+	// Emit start event
+	m.autoAnswerChan <- AutoAnswerEvent{Type: "start", Question: question}
+
+	req := &pb.AnalyzeRequest{
+		UserQuery:   "Answer this question concisely: " + question,
+		Transcript:  m.GetRecentTranscript(120),
+		ContextText: m.GetLatestScreenText(),
+	}
+
+	err := m.inference.AnalyzeStream(ctx, req, func(chunk string) {
+		m.autoAnswerChan <- AutoAnswerEvent{Type: "chunk", Content: chunk}
+	})
+
+	if err != nil {
+		span.SetAttr("error", err.Error())
+		log.Error("auto-answer error", "error", err)
+		m.autoAnswerChan <- AutoAnswerEvent{Type: "chunk", Content: "Error: " + err.Error()}
+	}
+
+	// Emit done event
+	m.autoAnswerChan <- AutoAnswerEvent{Type: "done"}
 }
 
 // Start begins orchestration

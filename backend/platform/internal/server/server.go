@@ -46,6 +46,20 @@ type DoneMessage struct {
 	Type string `json:"type"`
 }
 
+type AutoStartMessage struct {
+	Type     string `json:"type"`
+	Question string `json:"question"`
+}
+
+type AutoChunkMessage struct {
+	Type    string `json:"type"`
+	Content string `json:"content"`
+}
+
+type AutoDoneMessage struct {
+	Type string `json:"type"`
+}
+
 // Server handles HTTP and WebSocket connections
 type Server struct {
 	orch *orchestrator.Orchestrator
@@ -63,8 +77,9 @@ func New(orch *orchestrator.Orchestrator, cfg *config.Config) *Server {
 		conns: make(map[*websocket.Conn]struct{}),
 	}
 
-	// Start transcript broadcaster
+	// Start broadcasters
 	go s.broadcastTranscripts()
+	go s.broadcastAutoAnswers()
 
 	return s
 }
@@ -196,6 +211,30 @@ func (s *Server) broadcastTranscripts() {
 				ctx := context.Background()
 				_ = wsjson.Write(ctx, c, msg)
 			}(conn)
+		}
+		s.mu.RUnlock()
+	}
+}
+
+func (s *Server) broadcastAutoAnswers() {
+	for evt := range s.orch.AutoAnswerEvents() {
+		var msg interface{}
+		switch evt.Type {
+		case "start":
+			msg = AutoStartMessage{Type: "auto_start", Question: evt.Question}
+		case "chunk":
+			msg = AutoChunkMessage{Type: "auto_chunk", Content: evt.Content}
+		case "done":
+			msg = AutoDoneMessage{Type: "auto_done"}
+		default:
+			continue
+		}
+
+		s.mu.RLock()
+		for conn := range s.conns {
+			go func(c *websocket.Conn, m interface{}) {
+				_ = wsjson.Write(context.Background(), c, m)
+			}(conn, msg)
 		}
 		s.mu.RUnlock()
 	}
