@@ -108,3 +108,47 @@ func TestCapturerSystemAudioFlag(t *testing.T) {
 	// The filtering happens in Start(), not classifyDevice()
 	// classifyDevice just identifies, Start() filters based on flag
 }
+
+func TestIsExcluded(t *testing.T) {
+	c := &Capturer{excludedDevs: []string{"iphone", "teams"}}
+
+	tests := []struct {
+		device   string
+		excluded bool
+	}{
+		{"iPhone Microphone", true},
+		{"Microsoft Teams Audio", true},
+		{"MacBook Pro Microphone", false},
+		{"BlackHole 2ch", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.device, func(t *testing.T) {
+			if got := c.isExcluded(tt.device); got != tt.excluded {
+				t.Errorf("isExcluded(%q) = %v, want %v", tt.device, got, tt.excluded)
+			}
+		})
+	}
+}
+
+func TestPreferDevice(t *testing.T) {
+	c := &Capturer{}
+
+	tests := []struct {
+		name, current string
+		prefer        bool
+	}{
+		{"MacBook Pro Microphone", "iPhone Microphone", true},
+		{"Built-in Microphone", "External Mic", true},
+		{"iPhone Microphone", "MacBook Pro Microphone", false},
+		{"External Mic", "Some Other Mic", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name+"_vs_"+tt.current, func(t *testing.T) {
+			if got := c.preferDevice(tt.name, tt.current); got != tt.prefer {
+				t.Errorf("preferDevice(%q, %q) = %v, want %v", tt.name, tt.current, got, tt.prefer)
+			}
+		})
+	}
+}

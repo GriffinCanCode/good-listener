@@ -27,6 +27,7 @@ type Capturer struct {
 	mu           sync.Mutex
 	running      bool
 	systemAudio  bool
+	excludedDevs []string
 }
 
 type deviceCapture struct {
@@ -36,7 +37,7 @@ type deviceCapture struct {
 }
 
 // NewCapturer creates a new audio capturer.
-func NewCapturer(sampleRate, bufferSize int, captureSystemAudio bool) (*Capturer, error) {
+func NewCapturer(sampleRate, bufferSize int, captureSystemAudio bool, excludedDevices []string) (*Capturer, error) {
 	if err := portaudio.Initialize(); err != nil {
 		return nil, err
 	}
@@ -46,6 +47,7 @@ func NewCapturer(sampleRate, bufferSize int, captureSystemAudio bool) (*Capturer
 		sampleRate:   sampleRate,
 		framesPerBuf: 1024, // ~23ms at 44100Hz
 		systemAudio:  captureSystemAudio,
+		excludedDevs: excludedDevices,
 	}, nil
 }
 
@@ -67,8 +69,12 @@ func (c *Capturer) Start(ctx context.Context) error {
 		return err
 	}
 
+	// Collect candidates by source type, pick best user mic
+	var userMic *portaudio.DeviceInfo
+	var systemDevs []*portaudio.DeviceInfo
+
 	for _, dev := range devices {
-		if dev.MaxInputChannels < 1 {
+		if dev.MaxInputChannels < 1 || c.isExcluded(dev.Name) {
 			continue
 		}
 
@@ -76,15 +82,35 @@ func (c *Capturer) Start(ctx context.Context) error {
 		if source == "" {
 			continue
 		}
-		if source == "system" && !c.systemAudio {
-			continue
-		}
 
-		if err := c.startDevice(ctx, dev, source); err != nil {
+		if source == "system" {
+			if c.systemAudio {
+				systemDevs = append(systemDevs, dev)
+			}
+		} else if source == "user" {
+			// Prefer built-in/MacBook mic over others
+			if userMic == nil || c.preferDevice(dev.Name, userMic.Name) {
+				userMic = dev
+			}
+		}
+	}
+
+	// Start single best user mic
+	if userMic != nil {
+		if err := c.startDevice(ctx, userMic, "user"); err != nil {
+			slog.Warn("failed to start device", "device", userMic.Name, "error", err)
+		} else {
+			slog.Info("started audio capture", "device", userMic.Name, "source", "user")
+		}
+	}
+
+	// Start system audio devices
+	for _, dev := range systemDevs {
+		if err := c.startDevice(ctx, dev, "system"); err != nil {
 			slog.Warn("failed to start device", "device", dev.Name, "error", err)
 			continue
 		}
-		slog.Info("started audio capture", "device", dev.Name, "source", source)
+		slog.Info("started audio capture", "device", dev.Name, "source", "system")
 	}
 
 	return nil
@@ -106,6 +132,28 @@ func (c *Capturer) classifyDevice(name string) string {
 	}
 
 	return ""
+}
+
+func (c *Capturer) isExcluded(name string) bool {
+	for _, ex := range c.excludedDevs {
+		if containsIgnoreCase(name, ex) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Capturer) preferDevice(name, current string) bool {
+	// Prefer built-in/MacBook mics over external/virtual
+	preferred := []string{"macbook", "built-in"}
+	for _, p := range preferred {
+		nameHas := containsIgnoreCase(name, p)
+		currHas := containsIgnoreCase(current, p)
+		if nameHas && !currHas {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Capturer) startDevice(ctx context.Context, dev *portaudio.DeviceInfo, source string) error {

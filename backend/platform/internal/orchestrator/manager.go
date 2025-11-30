@@ -54,7 +54,7 @@ type Manager struct {
 // New creates a new manager.
 func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 	log := trace.Logger(context.Background())
-	audioCap, err := audiocap.NewCapturer(cfg.SampleRate, AudioBufferSize, cfg.CaptureSystemAudio)
+	audioCap, err := audiocap.NewCapturer(cfg.SampleRate, AudioBufferSize, cfg.CaptureSystemAudio, cfg.ExcludedAudioDevices)
 	if err != nil {
 		log.Error("failed to create audio capturer", "error", err)
 	}
