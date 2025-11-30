@@ -24,13 +24,14 @@ export const LiveTranscript: React.FC = () => {
   return (
     <div className="live-transcript-container">
       <div className="transcript-list">
-        <AnimatePresence>
+        <AnimatePresence initial={false}>
           {transcripts.map((t) => (
             <motion.div
               key={t.id}
-              initial={{ opacity: 0, x: -10 }}
+              initial={{ opacity: 0, x: -6 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.12, ease: 'easeOut' }}
               className={`transcript-item ${t.source}`}
             >
               <div className="transcript-icon">
