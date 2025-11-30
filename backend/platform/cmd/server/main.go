@@ -21,12 +21,16 @@ func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelDebug}))
 	slog.SetDefault(logger)
 
-	cfg := config.Load()
+	cfg, err := config.Load()
+	if err != nil {
+		slog.Error("config validation failed", "error", err)
+		os.Exit(1)
+	}
 
 	// Connect to inference gRPC server
-	inference, err := grpcclient.New(cfg.InferenceAddr)
+	inference, err := grpcclient.New(cfg.Platform.InferenceAddr)
 	if err != nil {
-		slog.Error("failed to connect to inference server", "addr", cfg.InferenceAddr, "error", err)
+		slog.Error("failed to connect to inference server", "addr", cfg.Platform.InferenceAddr, "error", err)
 		os.Exit(1)
 	}
 	defer func() { _ = inference.Close() }()
@@ -57,14 +61,14 @@ func main() {
 
 	// Start HTTP server
 	httpServer := &http.Server{
-		Addr:         cfg.HTTPAddr,
+		Addr:         cfg.Platform.HTTPAddr,
 		Handler:      srv.Handler(),
 		ReadTimeout:  10 * time.Second,
 		WriteTimeout: 10 * time.Second,
 	}
 
 	go func() {
-		slog.Info("platform server starting", "http", cfg.HTTPAddr, "inference", cfg.InferenceAddr)
+		slog.Info("platform server starting", "http", cfg.Platform.HTTPAddr, "inference", cfg.Platform.InferenceAddr)
 		if err := httpServer.ListenAndServe(); err != http.ErrServerClosed {
 			slog.Error("http server error", "error", err)
 		}

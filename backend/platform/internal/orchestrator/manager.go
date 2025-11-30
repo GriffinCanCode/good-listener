@@ -30,6 +30,13 @@ type AutoAnswerEvent struct {
 	Content  string // Only for "chunk"
 }
 
+// VADEvent represents a voice activity detection event.
+type VADEvent struct {
+	Probability float32 `json:"probability"`
+	IsSpeech    bool    `json:"is_speech"`
+	Source      string  `json:"source"` // "user" or "system"
+}
+
 // Orchestrator is an alias for Manager (backwards compatibility).
 type Orchestrator = Manager
 
@@ -44,6 +51,7 @@ type Manager struct {
 	transcripts    *transcript.MemoryStore
 	autoAnswer     *autoanswer.Detector
 	autoAnswerChan chan AutoAnswerEvent
+	vadChan        chan VADEvent
 	memBatcher     *memory.Batcher
 
 	mu        sync.RWMutex
@@ -54,13 +62,13 @@ type Manager struct {
 // New creates a new manager.
 func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 	log := trace.Logger(context.Background())
-	audioCap, err := audiocap.NewCapturer(cfg.SampleRate, AudioBufferSize, cfg.CaptureSystemAudio, cfg.ExcludedAudioDevices)
+	audioCap, err := audiocap.NewCapturer(cfg.Audio.SampleRate, AudioBufferSize, cfg.Audio.CaptureSystemAudio, cfg.Audio.ExcludedDevices)
 	if err != nil {
 		log.Error("failed to create audio capturer", "error", err)
 	}
 
 	transcripts := transcript.NewStore(TranscriptMaxEntries, TranscriptEventBuffer)
-	autoAnswerDet := autoanswer.NewDetector(inference, cfg.AutoAnswerCooldown, cfg.AutoAnswerEnabled)
+	autoAnswerDet := autoanswer.NewDetector(inference, cfg.AutoAnswer.CooldownSeconds, cfg.AutoAnswer.Enabled)
 	memBatcher := memory.NewBatcher(inference, MemoryBatcherMaxSize, MemoryBatcherFlushDelay)
 
 	m := &Manager{
@@ -70,18 +78,19 @@ func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 		transcripts:    transcripts,
 		autoAnswer:     autoAnswerDet,
 		autoAnswerChan: make(chan AutoAnswerEvent, AutoAnswerChannelBuffer),
+		vadChan:        make(chan VADEvent, VADChannelBuffer),
 		memBatcher:     memBatcher,
 		recording:      true,
 		stopCh:         make(chan struct{}),
 	}
 
-	// Create audio processor with speech handler
+	// Create audio processor with speech and VAD handlers
 	if audioCap != nil {
 		m.audioProc = audio.NewProcessor(inference, audio.Config{
-			SampleRate:       cfg.SampleRate,
-			VADThreshold:     cfg.VADThreshold,
-			MaxSilenceChunks: cfg.MaxSilenceChunks,
-		}, m.handleSpeech)
+			SampleRate:       cfg.Audio.SampleRate,
+			VADThreshold:     cfg.Audio.VADThreshold,
+			MaxSilenceChunks: cfg.Audio.MaxSilenceChunks,
+		}, m.handleSpeech, m.handleVAD)
 	}
 
 	// Create screen processor with batched memory client
@@ -111,7 +120,7 @@ func (m *Manager) handleSpeech(ctx context.Context, samples []float32, source st
 
 	log := trace.Logger(ctx)
 	audioBytes := audio.Float32ToBytes(samples)
-	text, err := m.inference.Transcribe(ctx, audioBytes, int32(m.cfg.SampleRate))
+	text, err := m.inference.Transcribe(ctx, audioBytes, int32(m.cfg.Audio.SampleRate))
 	if err != nil {
 		span.SetAttr("error", err.Error())
 		log.Error("transcription error", "error", err)
@@ -159,6 +168,19 @@ func (m *Manager) AutoAnswerEvents() <-chan AutoAnswerEvent {
 	return m.autoAnswerChan
 }
 
+// VADEvents returns channel for VAD probability events.
+func (m *Manager) VADEvents() <-chan VADEvent {
+	return m.vadChan
+}
+
+// handleVAD sends VAD events to the channel (non-blocking).
+func (m *Manager) handleVAD(prob float32, isSpeech bool, source string) {
+	select {
+	case m.vadChan <- VADEvent{Probability: prob, IsSpeech: isSpeech, Source: source}:
+	default: // Drop if buffer full to avoid blocking audio processing
+	}
+}
+
 // streamAutoAnswer generates and streams an LLM response for a detected question.
 func (m *Manager) streamAutoAnswer(ctx context.Context, question string) {
 	ctx, span := trace.StartSpan(ctx, "stream_auto_answer")
@@ -201,7 +223,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		go m.audioLoop(ctx)
 	}
 
-	go m.screenProc.Run(ctx, m.cfg.ScreenCaptureRate, m.stopCh)
+	go m.screenProc.Run(ctx, m.cfg.Screen.CaptureRate, m.stopCh)
 	go m.vadCleanupLoop(ctx)
 	go m.summarizationLoop(ctx)
 

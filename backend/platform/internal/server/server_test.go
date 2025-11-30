@@ -6,11 +6,11 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/good-listener/platform/internal/config"
-	"github.com/good-listener/platform/internal/orchestrator"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/config"
+	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator"
 )
 
-// mockOrchestrator for testing
+// mockOrchestrator for testing.
 type mockOrchestrator struct {
 	screenText    string
 	screenImage   []byte
@@ -43,7 +43,7 @@ func TestCORSMiddleware(t *testing.T) {
 	}))
 
 	// Test OPTIONS request
-	req := httptest.NewRequest("OPTIONS", "/test", nil)
+	req := httptest.NewRequest("OPTIONS", "/test", http.NoBody)
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -58,7 +58,7 @@ func TestCORSMiddleware(t *testing.T) {
 	}
 
 	// Test regular request
-	req = httptest.NewRequest("GET", "/test", nil)
+	req = httptest.NewRequest("GET", "/test", http.NoBody)
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
@@ -136,15 +136,17 @@ func TestChatMessageParsing(t *testing.T) {
 
 func TestServerConfig(t *testing.T) {
 	cfg := &config.Config{
-		HTTPAddr:      ":8000",
-		InferenceAddr: "localhost:50051",
+		Platform: config.PlatformConfig{
+			HTTPAddr:      ":8000",
+			InferenceAddr: "localhost:50051",
+		},
 	}
 
-	if cfg.HTTPAddr != ":8000" {
-		t.Errorf("HTTPAddr = %q, want %q", cfg.HTTPAddr, ":8000")
+	if cfg.Platform.HTTPAddr != ":8000" {
+		t.Errorf("Platform.HTTPAddr = %q, want %q", cfg.Platform.HTTPAddr, ":8000")
 	}
-	if cfg.InferenceAddr != "localhost:50051" {
-		t.Errorf("InferenceAddr = %q, want %q", cfg.InferenceAddr, "localhost:50051")
+	if cfg.Platform.InferenceAddr != "localhost:50051" {
+		t.Errorf("Platform.InferenceAddr = %q, want %q", cfg.Platform.InferenceAddr, "localhost:50051")
 	}
 }
 

@@ -2,7 +2,6 @@
 
 import asyncio
 import io
-import os
 import re
 import signal
 from concurrent import futures
@@ -17,18 +16,8 @@ load_dotenv()
 
 import app.pb.cognition_pb2 as pb
 import app.pb.cognition_pb2_grpc as pb_grpc
-from app.core import TraceContext, TracingInterceptor, get_logger, set_trace_context, span
-from app.services.constants import (
-    DIARIZATION_MIN_SPEAKERS,
-    GRPC_DEFAULT_PORT,
-    GRPC_MAX_WORKERS,
-    GRPC_SHUTDOWN_GRACE_PERIOD,
-    MEMORY_QUERY_DEFAULT_RESULTS,
-    MIN_QUESTION_LENGTH,
-    SAMPLES_PER_SECOND,
-    SCREEN_CONTEXT_MAX_LENGTH,
-    VAD_DEFAULT_SAMPLE_RATE,
-)
+from app.core import TraceContext, TracingInterceptor, get_config, get_logger, set_trace_context, span
+from app.services.constants import DIARIZATION_MIN_SPEAKERS, SAMPLES_PER_SECOND
 from app.services.audio import DiarizationService, TranscriptionService, VADService
 from app.services.health import create_health_servicer
 from app.services.llm import LLMService
@@ -46,10 +35,10 @@ QUESTION_STARTERS = re.compile(
 )
 
 
-def is_question(text: str) -> bool:
+def is_question(text: str, min_length: int) -> bool:
     """Detect if text is a question."""
     text = text.strip()
-    if not text or len(text) < MIN_QUESTION_LENGTH:
+    if not text or len(text) < min_length:
         return False
     return text.endswith("?") or bool(QUESTION_STARTERS.match(text))
 
@@ -111,12 +100,13 @@ class TranscriptionServicer(pb_grpc.TranscriptionServiceServicer):
 class VADServicer(pb_grpc.VADServiceServicer):
     def __init__(self):
         self.service = VADService()
+        self._default_sample_rate = get_config().audio.sample_rate
 
     def DetectSpeech(self, request: pb.VADRequest, context) -> pb.VADResponse:
         ctx = TraceContext.from_grpc_context(context)
         set_trace_context(ctx)
         audio = np.frombuffer(request.audio_chunk, dtype=np.float32)
-        prob, is_speech = self.service.detect_speech(audio, request.sample_rate or VAD_DEFAULT_SAMPLE_RATE)
+        prob, is_speech = self.service.detect_speech(audio, request.sample_rate or self._default_sample_rate)
         return pb.VADResponse(speech_probability=prob, is_speech=is_speech)
 
     def ResetState(self, _request: pb.ResetStateRequest, context) -> pb.ResetStateResponse:
@@ -154,11 +144,14 @@ class OCRServicer(pb_grpc.OCRServiceServicer):
 
 class LLMServicer(pb_grpc.LLMServiceServicer):
     def __init__(self, memory_service: MemoryService):
+        cfg = get_config()
         self.service = LLMService(
-            provider=os.getenv("LLM_PROVIDER", "gemini"),
-            model_name=os.getenv("LLM_MODEL", "gemini-2.0-flash"),
+            provider=cfg.llm.provider,
+            model_name=cfg.llm.model,
             memory_service=memory_service,
         )
+        self._screen_context_max = cfg.llm.screen_context_max_length
+        self._min_question_len = cfg.auto_answer.min_question_length
 
     async def Analyze(self, request: pb.AnalyzeRequest, context):
         ctx = TraceContext.from_grpc_context(context)
@@ -169,7 +162,7 @@ class LLMServicer(pb_grpc.LLMServiceServicer):
         if request.transcript:
             context_parts.append(f"RECENT CONVERSATION:\n{request.transcript}")
         if request.context_text:
-            context_parts.append(f"SCREEN TEXT:\n{request.context_text[:SCREEN_CONTEXT_MAX_LENGTH]}")
+            context_parts.append(f"SCREEN TEXT:\n{request.context_text[:self._screen_context_max]}")
         context_text = "\n\n".join(context_parts) or "No context available."
 
         # Parse image if provided
@@ -185,7 +178,7 @@ class LLMServicer(pb_grpc.LLMServiceServicer):
     def IsQuestion(self, request: pb.IsQuestionRequest, context) -> pb.IsQuestionResponse:
         ctx = TraceContext.from_grpc_context(context)
         set_trace_context(ctx)
-        return pb.IsQuestionResponse(is_question=is_question(request.text))
+        return pb.IsQuestionResponse(is_question=is_question(request.text, self._min_question_len))
 
     async def SummarizeTranscript(self, request: pb.SummarizeRequest, context) -> pb.SummarizeResponse:
         ctx = TraceContext.from_grpc_context(context)
@@ -198,6 +191,7 @@ class LLMServicer(pb_grpc.LLMServiceServicer):
 class MemoryServicer(pb_grpc.MemoryServiceServicer):
     def __init__(self, memory_service: MemoryService):
         self.service = memory_service
+        self._query_default_results = get_config().memory.query_default_results
 
     def Store(self, request: pb.StoreRequest, context) -> pb.StoreResponse:
         ctx = TraceContext.from_grpc_context(context)
@@ -217,7 +211,7 @@ class MemoryServicer(pb_grpc.MemoryServiceServicer):
         ctx = TraceContext.from_grpc_context(context)
         set_trace_context(ctx)
         filter_meta = {"source": request.source_filter} if request.source_filter else None
-        docs = self.service.query_memory(request.query_text, request.n_results or MEMORY_QUERY_DEFAULT_RESULTS, filter_meta)
+        docs = self.service.query_memory(request.query_text, request.n_results or self._query_default_results, filter_meta)
         return pb.QueryResponse(documents=docs)
 
     def Clear(self, _request: pb.ClearRequest, context) -> pb.ClearResponse:
@@ -226,33 +220,26 @@ class MemoryServicer(pb_grpc.MemoryServiceServicer):
         return pb.ClearResponse(deleted_count=0)
 
 
-def _timed_load(service_name: str, loader):
-    """Load a model/service and log duration."""
-    import time
-    start = time.perf_counter()
-    result = loader()
-    elapsed_ms = (time.perf_counter() - start) * 1000
-    logger.info("model_loaded", service=service_name, duration_ms=round(elapsed_ms, 1))
-    return result
+async def serve(port: int | None = None):
+    """Start the gRPC server immediately. Models lazy-load on first use."""
+    import os
 
+    cfg = get_config()
+    port = port or cfg.inference.grpc_port
 
-async def serve(port: int = GRPC_DEFAULT_PORT):
-    """Start the gRPC server with graceful shutdown."""
     server = grpc.aio.server(
-        futures.ThreadPoolExecutor(max_workers=GRPC_MAX_WORKERS),
+        futures.ThreadPoolExecutor(max_workers=cfg.inference.grpc_max_workers),
         interceptors=[TracingInterceptor()],
     )
 
-    # Preload all ML models with timing
-    logger.info("preloading_models")
-    hf_token = os.getenv("HF_TOKEN")  # Hugging Face token for pyannote models
-    memory_service = _timed_load("memory", MemoryService)
-    transcription_servicer = _timed_load("transcription", lambda: TranscriptionServicer(auth_token=hf_token))
-    vad_servicer = _timed_load("vad", VADServicer)
-    ocr_servicer = _timed_load("ocr", OCRServicer)
-    llm_servicer = _timed_load("llm", lambda: LLMServicer(memory_service))
+    # Create servicers without loading models (lazy-load on first use)
+    hf_token = os.getenv("HF_TOKEN")  # HF_TOKEN remains env-only (auth secret)
+    memory_service = MemoryService()
+    transcription_servicer = TranscriptionServicer(auth_token=hf_token)
+    vad_servicer = VADServicer()
+    ocr_servicer = OCRServicer()
+    llm_servicer = LLMServicer(memory_service)
     memory_servicer = MemoryServicer(memory_service)
-    logger.info("models_preloaded")
 
     # Register services
     pb_grpc.add_TranscriptionServiceServicer_to_server(transcription_servicer, server)
@@ -261,14 +248,8 @@ async def serve(port: int = GRPC_DEFAULT_PORT):
     pb_grpc.add_LLMServiceServicer_to_server(llm_servicer, server)
     pb_grpc.add_MemoryServiceServicer_to_server(memory_servicer, server)
 
-    # Register health check service with model availability checks
-    health_servicer = create_health_servicer(
-        transcription_svc=transcription_servicer.service,
-        vad_svc=vad_servicer.service,
-        ocr_svc=ocr_servicer.service,
-        llm_svc=llm_servicer.service,
-    )
-    health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
+    # Health check returns SERVING immediately
+    health_pb2_grpc.add_HealthServicer_to_server(create_health_servicer(), server)
 
     addr = f"[::]:{port}"
     server.add_insecure_port(addr)
@@ -288,14 +269,13 @@ async def serve(port: int = GRPC_DEFAULT_PORT):
     await server.start()
 
     await shutdown_event.wait()
-    logger.info("graceful_shutdown_initiated", grace_period=GRPC_SHUTDOWN_GRACE_PERIOD)
-    await server.stop(grace=GRPC_SHUTDOWN_GRACE_PERIOD)
+    logger.info("graceful_shutdown_initiated", grace_period=cfg.inference.grpc_shutdown_grace_period)
+    await server.stop(grace=cfg.inference.grpc_shutdown_grace_period)
     logger.info("grpc_server_stopped")
 
 
 def main():
-    port = int(os.getenv("GRPC_PORT", str(GRPC_DEFAULT_PORT)))
-    asyncio.run(serve(port))
+    asyncio.run(serve())
 
 
 if __name__ == "__main__":

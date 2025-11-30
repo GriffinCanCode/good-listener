@@ -137,7 +137,7 @@ class TestLLMService:
                 service = LLMService(provider="gemini", memory_service=mock_memory)
                 chunks = [c async for c in service.analyze("context", "help with code")]
 
-                mock_memory.query_memory.assert_called_once_with("help with code", n_results=3)
+                mock_memory.query_memory.assert_called_once_with("help with code", n_results=5)
 
     @pytest.mark.asyncio
     async def test_analyze_truncates_context(self):

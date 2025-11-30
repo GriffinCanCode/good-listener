@@ -7,6 +7,15 @@ import pytest
 from PIL import Image
 
 
+@pytest.fixture(autouse=True)
+def reset_config_singleton():
+    """Reset config singleton between tests to ensure clean state."""
+    import app.core.config as cfg_module
+    cfg_module._config = None
+    yield
+    cfg_module._config = None
+
+
 @pytest.fixture
 def sample_audio():
     """Generate sample audio data (1 second of silence at 16kHz)."""

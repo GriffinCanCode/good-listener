@@ -1,0 +1,240 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://good-listener/config/schema.json",
+  "title": "Good Listener Configuration",
+  "description": "Shared configuration schema for Go platform and Python inference services",
+  "type": "object",
+  "properties": {
+    "platform": {
+      "type": "object",
+      "description": "Go platform service configuration",
+      "properties": {
+        "http_addr": {
+          "type": "string",
+          "default": ":8000",
+          "description": "HTTP server address"
+        },
+        "inference_addr": {
+          "type": "string",
+          "default": "localhost:50051",
+          "description": "Inference gRPC server address"
+        }
+      },
+      "additionalProperties": false
+    },
+    "inference": {
+      "type": "object",
+      "description": "Python inference service configuration",
+      "properties": {
+        "grpc_port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 50051,
+          "description": "gRPC server port"
+        },
+        "grpc_max_workers": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10,
+          "description": "gRPC thread pool size"
+        },
+        "grpc_shutdown_grace_period": {
+          "type": "number",
+          "minimum": 0,
+          "default": 10,
+          "description": "Shutdown grace period in seconds"
+        }
+      },
+      "additionalProperties": false
+    },
+    "audio": {
+      "type": "object",
+      "description": "Audio capture and processing configuration",
+      "properties": {
+        "sample_rate": {
+          "type": "integer",
+          "enum": [8000, 16000, 22050, 44100, 48000],
+          "default": 16000,
+          "description": "Audio sample rate in Hz"
+        },
+        "vad_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.5,
+          "description": "Voice activity detection threshold (0-1)"
+        },
+        "max_silence_chunks": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 15,
+          "description": "Max silence chunks before ending speech segment"
+        },
+        "capture_system_audio": {
+          "type": "boolean",
+          "default": true,
+          "description": "Capture system audio output"
+        },
+        "excluded_devices": {
+          "type": "array",
+          "items": {"type": "string"},
+          "default": ["iphone", "teams"],
+          "description": "Device name patterns to exclude (case-insensitive)"
+        }
+      },
+      "additionalProperties": false
+    },
+    "screen": {
+      "type": "object",
+      "description": "Screen capture configuration",
+      "properties": {
+        "capture_rate": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10,
+          "default": 1.0,
+          "description": "Screen capture rate in Hz"
+        },
+        "stable_count_threshold": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 2,
+          "description": "Frames with same hash before processing"
+        },
+        "min_text_length": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 10,
+          "description": "Minimum OCR text length for storage"
+        },
+        "phash_similarity_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.95,
+          "description": "Perceptual hash similarity threshold to skip OCR"
+        }
+      },
+      "additionalProperties": false
+    },
+    "llm": {
+      "type": "object",
+      "description": "LLM service configuration",
+      "properties": {
+        "provider": {
+          "type": "string",
+          "enum": ["gemini", "ollama"],
+          "default": "gemini",
+          "description": "LLM provider"
+        },
+        "model": {
+          "type": "string",
+          "default": "gemini-2.0-flash",
+          "description": "Model name"
+        },
+        "ollama_host": {
+          "type": "string",
+          "default": "http://localhost:11434",
+          "description": "Ollama server URL"
+        },
+        "context_max_length": {
+          "type": "integer",
+          "minimum": 100,
+          "default": 5000,
+          "description": "Maximum context text length"
+        },
+        "screen_context_max_length": {
+          "type": "integer",
+          "minimum": 100,
+          "default": 2000,
+          "description": "Maximum screen context length"
+        }
+      },
+      "additionalProperties": false
+    },
+    "memory": {
+      "type": "object",
+      "description": "Vector memory configuration",
+      "properties": {
+        "query_default_results": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 5,
+          "description": "Default number of query results"
+        },
+        "prune_threshold": {
+          "type": "integer",
+          "minimum": 100,
+          "default": 10000,
+          "description": "Entries triggering pruning"
+        },
+        "prune_keep": {
+          "type": "integer",
+          "minimum": 10,
+          "default": 5000,
+          "description": "Entries to keep after pruning"
+        },
+        "batch_max_size": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 50,
+          "description": "Maximum batch size for storage"
+        },
+        "batch_flush_delay_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "default": 2000,
+          "description": "Batch flush delay in milliseconds"
+        }
+      },
+      "additionalProperties": false
+    },
+    "auto_answer": {
+      "type": "object",
+      "description": "Auto-answer feature configuration",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable auto-answer feature"
+        },
+        "cooldown_seconds": {
+          "type": "number",
+          "minimum": 0,
+          "default": 10,
+          "description": "Cooldown between auto-answers"
+        },
+        "min_question_length": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 10,
+          "description": "Minimum text length to detect as question"
+        }
+      },
+      "additionalProperties": false
+    },
+    "logging": {
+      "type": "object",
+      "description": "Logging configuration",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": ["DEBUG", "INFO", "WARNING", "ERROR"],
+          "default": "INFO",
+          "description": "Log level"
+        },
+        "format": {
+          "type": "string",
+          "enum": ["json", "text"],
+          "default": "text",
+          "description": "Log output format"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
+

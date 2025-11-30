@@ -6,8 +6,7 @@ from collections.abc import AsyncGenerator
 from langchain_core.messages import HumanMessage
 from PIL import Image
 
-from app.core import get_logger
-from app.services.constants import CONTEXT_TEXT_MAX_LENGTH, MEMORY_QUERY_RESULTS
+from app.core import get_config, get_logger
 from app.services.llm.prompts import ANALYSIS_TEMPLATE, SUMMARIZATION_PROMPT
 
 logger = get_logger(__name__)
@@ -16,6 +15,10 @@ logger = get_logger(__name__)
 class LLMService:
     def __init__(self, provider: str = "gemini", model_name: str = "gemini-2.0-flash", memory_service=None):
         self.provider, self.model_name, self.memory_service = provider, model_name, memory_service
+        cfg = get_config()
+        self._context_max_length = cfg.llm.context_max_length
+        self._memory_query_results = cfg.memory.query_default_results
+        self._ollama_host = cfg.llm.ollama_host
         if api_key := os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY"):
             os.environ["GOOGLE_API_KEY"] = api_key
         self.api_key = api_key
@@ -32,7 +35,7 @@ class LLMService:
             case "ollama":
                 from langchain_ollama import ChatOllama
 
-                return ChatOllama(model=self.model_name, base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434"))
+                return ChatOllama(model=self.model_name, base_url=self._ollama_host)
         return None
 
     async def analyze(self, context_text: str, user_query: str = "", image: Image.Image | None = None) -> AsyncGenerator[str, None]:
@@ -40,7 +43,7 @@ class LLMService:
             yield "LLM not configured."
             return
         msgs = ANALYSIS_TEMPLATE.invoke({
-            "context_text": context_text[:CONTEXT_TEXT_MAX_LENGTH] if context_text else "No text detected via OCR.",
+            "context_text": context_text[:self._context_max_length] if context_text else "No text detected via OCR.",
             "memory_context": self._get_memory_context(user_query),
             "user_query": user_query or "Analyze this screen.",
         }).to_messages()
@@ -57,7 +60,7 @@ class LLMService:
             yield f"Error: {e}"
 
     def _get_memory_context(self, query: str) -> str:
-        if self.memory_service and query and (memories := self.memory_service.query_memory(query, n_results=MEMORY_QUERY_RESULTS)):
+        if self.memory_service and query and (memories := self.memory_service.query_memory(query, n_results=self._memory_query_results)):
             return "\nRelevant Past Context:\n" + "\n".join(f"- {m}" for m in memories)
         return ""
 
