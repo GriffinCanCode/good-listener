@@ -33,15 +33,18 @@ type ScreenConfig struct {
 
 // AutoAnswerConfig holds auto-answer feature settings.
 type AutoAnswerConfig struct {
-	Enabled         bool
-	CooldownSeconds float64
-	MinQuestionLen  int
+	Enabled           bool
+	CooldownSeconds   float64
+	MinQuestionLength int // matches schema.auto_answer.min_question_length
 }
 
-// MemoryConfig holds vector memory batcher settings.
+// MemoryConfig holds vector memory settings.
 type MemoryConfig struct {
-	BatchMaxSize      int
-	BatchFlushDelayMs int
+	QueryDefaultResults int
+	PruneThreshold      int
+	PruneKeep           int
+	BatchMaxSize        int
+	BatchFlushDelayMs   int
 }
 
 // LoggingConfig holds logging settings.
@@ -82,6 +85,18 @@ func (c *Config) Validate() error {
 		errs = append(errs, fmt.Sprintf("screen.phash_similarity_threshold must be 0-1, got %f", c.Screen.PHashSimilarityThreshold))
 	}
 	// Memory validation
+	if c.Memory.QueryDefaultResults < 1 {
+		errs = append(errs, fmt.Sprintf("memory.query_default_results must be >= 1, got %d", c.Memory.QueryDefaultResults))
+	}
+	if c.Memory.PruneThreshold < 100 {
+		errs = append(errs, fmt.Sprintf("memory.prune_threshold must be >= 100, got %d", c.Memory.PruneThreshold))
+	}
+	if c.Memory.PruneKeep < 10 {
+		errs = append(errs, fmt.Sprintf("memory.prune_keep must be >= 10, got %d", c.Memory.PruneKeep))
+	}
+	if c.Memory.PruneKeep >= c.Memory.PruneThreshold {
+		errs = append(errs, fmt.Sprintf("memory.prune_keep (%d) must be < prune_threshold (%d)", c.Memory.PruneKeep, c.Memory.PruneThreshold))
+	}
 	if c.Memory.BatchMaxSize < 1 {
 		errs = append(errs, fmt.Sprintf("memory.batch_max_size must be >= 1, got %d", c.Memory.BatchMaxSize))
 	}
@@ -89,8 +104,8 @@ func (c *Config) Validate() error {
 	if c.AutoAnswer.CooldownSeconds < 0 {
 		errs = append(errs, fmt.Sprintf("auto_answer.cooldown_seconds must be >= 0, got %f", c.AutoAnswer.CooldownSeconds))
 	}
-	if c.AutoAnswer.MinQuestionLen < 1 {
-		errs = append(errs, fmt.Sprintf("auto_answer.min_question_length must be >= 1, got %d", c.AutoAnswer.MinQuestionLen))
+	if c.AutoAnswer.MinQuestionLength < 1 {
+		errs = append(errs, fmt.Sprintf("auto_answer.min_question_length must be >= 1, got %d", c.AutoAnswer.MinQuestionLength))
 	}
 	if len(errs) > 0 {
 		return fmt.Errorf("config validation failed:\n  - %s", strings.Join(errs, "\n  - "))
@@ -119,13 +134,16 @@ func Load() (*Config, error) {
 			PHashSimilarityThreshold: getEnvFloat("SCREEN_PHASH_THRESHOLD", 0.95),
 		},
 		AutoAnswer: AutoAnswerConfig{
-			Enabled:         getEnvBool("AUTO_ANSWER_ENABLED", true),
-			CooldownSeconds: getEnvFloat("AUTO_ANSWER_COOLDOWN", 10.0),
-			MinQuestionLen:  getEnvInt("MIN_QUESTION_LENGTH", 10),
+			Enabled:           getEnvBool("AUTO_ANSWER_ENABLED", true),
+			CooldownSeconds:   getEnvFloat("AUTO_ANSWER_COOLDOWN", 10.0),
+			MinQuestionLength: getEnvInt("MIN_QUESTION_LENGTH", 10),
 		},
 		Memory: MemoryConfig{
-			BatchMaxSize:      getEnvInt("MEMORY_BATCH_MAX_SIZE", 50),
-			BatchFlushDelayMs: getEnvInt("MEMORY_BATCH_FLUSH_DELAY_MS", 2000),
+			QueryDefaultResults: getEnvInt("MEMORY_QUERY_RESULTS", 5),
+			PruneThreshold:      getEnvInt("MEMORY_PRUNE_THRESHOLD", 10000),
+			PruneKeep:           getEnvInt("MEMORY_PRUNE_KEEP", 5000),
+			BatchMaxSize:        getEnvInt("MEMORY_BATCH_MAX_SIZE", 50),
+			BatchFlushDelayMs:   getEnvInt("MEMORY_BATCH_FLUSH_DELAY_MS", 2000),
 		},
 		Logging: LoggingConfig{
 			Level:  strings.ToUpper(getEnv("LOG_LEVEL", "INFO")),

@@ -727,6 +727,48 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  position: relative;
+}
+
+/* react-scroll-to-bottom inner container */
+.live-transcript-container > div {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.scroll-to-bottom-btn {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--glass-bg-strong);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.scroll-to-bottom-btn:hover {
+  background: var(--glass-bg-strong);
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+  transform: translateX(-50%) scale(1.1);
+}
+
+.scroll-to-bottom-btn::after {
+  content: '↓';
+  font-size: 14px;
+  font-weight: 600;
 }
 
 .live-transcript-container.empty {

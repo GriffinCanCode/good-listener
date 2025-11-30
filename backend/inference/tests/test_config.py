@@ -1,6 +1,8 @@
 """Tests for centralized configuration."""
 
+import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -13,6 +15,7 @@ from app.core.config import (
     LoggingConfig,
     MemoryConfig,
     ScreenConfig,
+    get_schema,
     load_config,
 )
 
@@ -123,4 +126,92 @@ def test_excluded_devices_parsing():
     cfg = load_config()
     
     assert cfg.audio.excluded_devices == ("iphone", "airpods", "teams")
+
+
+# ========== Schema Drift Detection Tests ==========
+
+class TestSchemaDrift:
+    """Tests ensuring Python config stays synchronized with schema.json."""
+
+    @pytest.fixture
+    def schema(self) -> dict:
+        return get_schema()
+
+    def test_inference_fields_match_schema(self, schema: dict):
+        """Verify InferenceConfig fields match schema.inference properties."""
+        schema_props = schema["properties"]["inference"]["properties"]
+        config_fields = {f.name for f in InferenceConfig.__dataclass_fields__.values()}
+        schema_fields = set(schema_props.keys())
+        assert config_fields == schema_fields, f"Drift: config={config_fields}, schema={schema_fields}"
+
+    def test_audio_fields_match_schema(self, schema: dict):
+        """Verify AudioConfig fields match schema.audio properties."""
+        schema_props = schema["properties"]["audio"]["properties"]
+        config_fields = {f.name for f in AudioConfig.__dataclass_fields__.values()}
+        schema_fields = set(schema_props.keys())
+        assert config_fields == schema_fields, f"Drift: config={config_fields}, schema={schema_fields}"
+
+    def test_screen_fields_match_schema(self, schema: dict):
+        """Verify ScreenConfig fields match schema.screen properties."""
+        schema_props = schema["properties"]["screen"]["properties"]
+        config_fields = {f.name for f in ScreenConfig.__dataclass_fields__.values()}
+        schema_fields = set(schema_props.keys())
+        assert config_fields == schema_fields, f"Drift: config={config_fields}, schema={schema_fields}"
+
+    def test_llm_fields_match_schema(self, schema: dict):
+        """Verify LLMConfig fields match schema.llm properties."""
+        schema_props = schema["properties"]["llm"]["properties"]
+        config_fields = {f.name for f in LLMConfig.__dataclass_fields__.values()}
+        schema_fields = set(schema_props.keys())
+        assert config_fields == schema_fields, f"Drift: config={config_fields}, schema={schema_fields}"
+
+    def test_memory_fields_match_schema(self, schema: dict):
+        """Verify MemoryConfig fields match schema.memory properties."""
+        schema_props = schema["properties"]["memory"]["properties"]
+        config_fields = {f.name for f in MemoryConfig.__dataclass_fields__.values()}
+        schema_fields = set(schema_props.keys())
+        assert config_fields == schema_fields, f"Drift: config={config_fields}, schema={schema_fields}"
+
+    def test_auto_answer_fields_match_schema(self, schema: dict):
+        """Verify AutoAnswerConfig fields match schema.auto_answer properties."""
+        schema_props = schema["properties"]["auto_answer"]["properties"]
+        config_fields = {f.name for f in AutoAnswerConfig.__dataclass_fields__.values()}
+        schema_fields = set(schema_props.keys())
+        assert config_fields == schema_fields, f"Drift: config={config_fields}, schema={schema_fields}"
+
+    def test_logging_fields_match_schema(self, schema: dict):
+        """Verify LoggingConfig fields match schema.logging properties."""
+        schema_props = schema["properties"]["logging"]["properties"]
+        config_fields = {f.name for f in LoggingConfig.__dataclass_fields__.values()}
+        schema_fields = set(schema_props.keys())
+        assert config_fields == schema_fields, f"Drift: config={config_fields}, schema={schema_fields}"
+
+    def test_defaults_match_schema(self, schema: dict):
+        """Verify default values match schema defaults."""
+        cfg = Config()  # Uses all defaults
+        mismatches = []
+
+        checks = [
+            ("inference.grpc_port", cfg.inference.grpc_port, schema["properties"]["inference"]["properties"]["grpc_port"]["default"]),
+            ("inference.grpc_max_workers", cfg.inference.grpc_max_workers, schema["properties"]["inference"]["properties"]["grpc_max_workers"]["default"]),
+            ("audio.sample_rate", cfg.audio.sample_rate, schema["properties"]["audio"]["properties"]["sample_rate"]["default"]),
+            ("audio.vad_threshold", cfg.audio.vad_threshold, schema["properties"]["audio"]["properties"]["vad_threshold"]["default"]),
+            ("audio.max_silence_chunks", cfg.audio.max_silence_chunks, schema["properties"]["audio"]["properties"]["max_silence_chunks"]["default"]),
+            ("screen.capture_rate", cfg.screen.capture_rate, schema["properties"]["screen"]["properties"]["capture_rate"]["default"]),
+            ("screen.stable_count_threshold", cfg.screen.stable_count_threshold, schema["properties"]["screen"]["properties"]["stable_count_threshold"]["default"]),
+            ("llm.provider", cfg.llm.provider, schema["properties"]["llm"]["properties"]["provider"]["default"]),
+            ("llm.model", cfg.llm.model, schema["properties"]["llm"]["properties"]["model"]["default"]),
+            ("memory.query_default_results", cfg.memory.query_default_results, schema["properties"]["memory"]["properties"]["query_default_results"]["default"]),
+            ("memory.batch_max_size", cfg.memory.batch_max_size, schema["properties"]["memory"]["properties"]["batch_max_size"]["default"]),
+            ("auto_answer.enabled", cfg.auto_answer.enabled, schema["properties"]["auto_answer"]["properties"]["enabled"]["default"]),
+            ("auto_answer.cooldown_seconds", cfg.auto_answer.cooldown_seconds, schema["properties"]["auto_answer"]["properties"]["cooldown_seconds"]["default"]),
+            ("logging.level", cfg.logging.level, schema["properties"]["logging"]["properties"]["level"]["default"]),
+            ("logging.format", cfg.logging.format, schema["properties"]["logging"]["properties"]["format"]["default"]),
+        ]
+
+        for path, actual, expected in checks:
+            if actual != expected:
+                mismatches.append(f"{path}: got {actual!r}, schema has {expected!r}")
+
+        assert not mismatches, f"Default value drift:\n  - " + "\n  - ".join(mismatches)
 

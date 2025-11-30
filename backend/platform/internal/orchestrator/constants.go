@@ -12,10 +12,6 @@ const (
 	TranscriptMaxEntries  = 30
 	TranscriptEventBuffer = 100
 
-	// Memory batcher configuration
-	MemoryBatcherMaxSize    = 50
-	MemoryBatcherFlushDelay = 2 * time.Second
-
 	// Channel buffer sizes
 	AutoAnswerChannelBuffer = 10
 	VADChannelBuffer        = 50

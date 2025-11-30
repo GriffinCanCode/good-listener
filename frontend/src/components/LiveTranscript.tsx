@@ -1,19 +1,13 @@
 import { AnimatePresence, motion } from 'framer-motion';
 import { Mic, User } from 'lucide-react';
-import React, { useEffect, useRef } from 'react';
+import React from 'react';
+import ScrollToBottom from 'react-scroll-to-bottom';
 import { useChatStore } from '../store/useChatStore';
 
 export const LiveTranscript: React.FC = () => {
   const transcripts = useChatStore((state) => state.liveTranscripts);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (transcripts.length > 0) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [transcripts]);
-
-  if (transcripts.length === 0) {
+  if (!transcripts.length) {
     return (
       <div className="live-transcript-container empty">
         <div className="empty-message">Waiting for audio...</div>
@@ -22,7 +16,10 @@ export const LiveTranscript: React.FC = () => {
   }
 
   return (
-    <div className="live-transcript-container">
+    <ScrollToBottom
+      className="live-transcript-container"
+      followButtonClassName="scroll-to-bottom-btn"
+    >
       <div className="transcript-list">
         <AnimatePresence initial={false}>
           {transcripts.map((t) => (
@@ -44,8 +41,7 @@ export const LiveTranscript: React.FC = () => {
             </motion.div>
           ))}
         </AnimatePresence>
-        <div ref={bottomRef} />
       </div>
-    </div>
+    </ScrollToBottom>
   );
 };

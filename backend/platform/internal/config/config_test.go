@@ -63,13 +63,25 @@ func TestLoad(t *testing.T) {
 	if cfg.AutoAnswer.CooldownSeconds != 10.0 {
 		t.Errorf("AutoAnswer.CooldownSeconds = %f, want %f", cfg.AutoAnswer.CooldownSeconds, 10.0)
 	}
-	if cfg.AutoAnswer.MinQuestionLen != 10 {
-		t.Errorf("AutoAnswer.MinQuestionLen = %d, want %d", cfg.AutoAnswer.MinQuestionLen, 10)
+	if cfg.AutoAnswer.MinQuestionLength != 10 {
+		t.Errorf("AutoAnswer.MinQuestionLength = %d, want %d", cfg.AutoAnswer.MinQuestionLength, 10)
 	}
 
 	// Check memory defaults
+	if cfg.Memory.QueryDefaultResults != 5 {
+		t.Errorf("Memory.QueryDefaultResults = %d, want %d", cfg.Memory.QueryDefaultResults, 5)
+	}
+	if cfg.Memory.PruneThreshold != 10000 {
+		t.Errorf("Memory.PruneThreshold = %d, want %d", cfg.Memory.PruneThreshold, 10000)
+	}
+	if cfg.Memory.PruneKeep != 5000 {
+		t.Errorf("Memory.PruneKeep = %d, want %d", cfg.Memory.PruneKeep, 5000)
+	}
 	if cfg.Memory.BatchMaxSize != 50 {
 		t.Errorf("Memory.BatchMaxSize = %d, want %d", cfg.Memory.BatchMaxSize, 50)
+	}
+	if cfg.Memory.BatchFlushDelayMs != 2000 {
+		t.Errorf("Memory.BatchFlushDelayMs = %d, want %d", cfg.Memory.BatchFlushDelayMs, 2000)
 	}
 
 	// Check logging defaults

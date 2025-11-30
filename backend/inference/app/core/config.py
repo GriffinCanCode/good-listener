@@ -11,8 +11,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-# Schema path relative to this file
-SCHEMA_PATH = Path(__file__).parent.parent.parent.parent.parent / "config" / "schema.json"
+# Schema path relative to this file (backend/inference/app/core/config.py -> backend/config/schema.json)
+SCHEMA_PATH = Path(__file__).parent.parent.parent.parent / "config" / "schema.json"
 
 
 @dataclass(frozen=True, slots=True)

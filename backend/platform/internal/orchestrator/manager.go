@@ -69,7 +69,7 @@ func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 
 	transcripts := transcript.NewStore(TranscriptMaxEntries, TranscriptEventBuffer)
 	autoAnswerDet := autoanswer.NewDetector(inference, cfg.AutoAnswer.CooldownSeconds, cfg.AutoAnswer.Enabled)
-	memBatcher := memory.NewBatcher(inference, MemoryBatcherMaxSize, MemoryBatcherFlushDelay)
+	memBatcher := memory.NewBatcher(inference, cfg.Memory.BatchMaxSize, time.Duration(cfg.Memory.BatchFlushDelayMs)*time.Millisecond)
 
 	m := &Manager{
 		inference:      inference,
