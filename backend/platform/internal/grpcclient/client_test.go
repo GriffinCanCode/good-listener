@@ -2,9 +2,98 @@ package grpcclient
 
 import (
 	"testing"
+	"time"
 
 	pb "github.com/good-listener/platform/pkg/pb"
 )
+
+func TestCircuitBreakerInitialState(t *testing.T) {
+	cb := NewCircuitBreaker()
+	if cb.State() != CircuitClosed {
+		t.Errorf("initial state = %v, want CircuitClosed", cb.State())
+	}
+}
+
+func TestCircuitBreakerOpensAfterThreshold(t *testing.T) {
+	cb := &CircuitBreaker{threshold: 3, resetTimeout: time.Second, halfOpenMax: 2}
+
+	for i := 0; i < 3; i++ {
+		cb.RecordFailure()
+	}
+
+	if cb.State() != CircuitOpen {
+		t.Errorf("state after %d failures = %v, want CircuitOpen", 3, cb.State())
+	}
+}
+
+func TestCircuitBreakerRejectsWhenOpen(t *testing.T) {
+	cb := &CircuitBreaker{threshold: 1, resetTimeout: time.Hour, halfOpenMax: 1}
+	cb.RecordFailure()
+
+	if err := cb.Allow(); err != ErrCircuitOpen {
+		t.Errorf("Allow() = %v, want ErrCircuitOpen", err)
+	}
+}
+
+func TestCircuitBreakerTransitionsToHalfOpen(t *testing.T) {
+	cb := &CircuitBreaker{threshold: 1, resetTimeout: time.Millisecond, halfOpenMax: 1}
+	cb.RecordFailure()
+
+	time.Sleep(5 * time.Millisecond)
+
+	if err := cb.Allow(); err != nil {
+		t.Errorf("Allow() after reset timeout = %v, want nil", err)
+	}
+	if cb.State() != CircuitHalfOpen {
+		t.Errorf("state after reset timeout = %v, want CircuitHalfOpen", cb.State())
+	}
+}
+
+func TestCircuitBreakerClosesAfterSuccesses(t *testing.T) {
+	cb := &CircuitBreaker{threshold: 1, resetTimeout: time.Millisecond, halfOpenMax: 2}
+	cb.RecordFailure()
+
+	time.Sleep(5 * time.Millisecond)
+	_ = cb.Allow() // transition to half-open
+
+	cb.RecordSuccess()
+	cb.RecordSuccess()
+
+	if cb.State() != CircuitClosed {
+		t.Errorf("state after successes = %v, want CircuitClosed", cb.State())
+	}
+}
+
+func TestCircuitBreakerReopensOnFailureInHalfOpen(t *testing.T) {
+	cb := &CircuitBreaker{threshold: 1, resetTimeout: time.Millisecond, halfOpenMax: 3}
+	cb.RecordFailure()
+
+	time.Sleep(5 * time.Millisecond)
+	_ = cb.Allow() // transition to half-open
+
+	cb.RecordFailure()
+
+	if cb.State() != CircuitOpen {
+		t.Errorf("state after failure in half-open = %v, want CircuitOpen", cb.State())
+	}
+}
+
+func TestDefaultConfig(t *testing.T) {
+	cfg := DefaultConfig()
+
+	if cfg.KeepaliveTime != 10*time.Second {
+		t.Errorf("KeepaliveTime = %v, want 10s", cfg.KeepaliveTime)
+	}
+	if cfg.KeepaliveTimeout != 3*time.Second {
+		t.Errorf("KeepaliveTimeout = %v, want 3s", cfg.KeepaliveTimeout)
+	}
+	if cfg.HealthCheckInterval != 5*time.Second {
+		t.Errorf("HealthCheckInterval = %v, want 5s", cfg.HealthCheckInterval)
+	}
+	if cfg.CircuitBreaker == nil {
+		t.Error("CircuitBreaker should not be nil")
+	}
+}
 
 func TestTranscribeRequest(t *testing.T) {
 	audio := []byte{0, 0, 0, 0} // 1 float32 sample
