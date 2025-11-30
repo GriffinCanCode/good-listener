@@ -42,6 +42,15 @@ export const useChatStore = create<ChatState>()(
       },
 
       createSession: () => {
+        const { sessions, currentSessionId } = get();
+        const currentSession = sessions.find((s) => s.id === currentSessionId);
+        
+        // Reuse current session if it's empty
+        if (currentSession?.messages.length === 0) {
+          set({ stream: '' });
+          return;
+        }
+        
         const newSession: Session = {
           id: Date.now().toString(),
           title: 'New Chat',
@@ -156,7 +165,10 @@ export const useChatStore = create<ChatState>()(
     {
       name: 'chat_sessions',
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ sessions: state.sessions, currentSessionId: state.currentSessionId }),
+      partialize: (state) => ({ 
+        sessions: state.sessions.filter((s) => s.messages.length > 0),
+        currentSessionId: state.currentSessionId 
+      }),
     }
   )
 );
