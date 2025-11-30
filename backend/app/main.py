@@ -11,10 +11,30 @@ load_dotenv()
 
 from app.services.monitor import BackgroundMonitor
 from app.services.llm import LLMService
+from app.services.capture import CaptureService
+from app.services.ocr import OCRService
+from app.services.analysis import AnalysisService
+from app.services.audio import AudioService
+from app.services.memory import MemoryService
 from app.routers import api
 
-monitor = BackgroundMonitor()
-llm_service = LLMService(provider="gemini", model_name="gemini-2.0-flash") 
+# Instantiate services
+capture_service = CaptureService()
+ocr_service = OCRService()
+analysis_service = AnalysisService()
+audio_service = AudioService()
+memory_service = MemoryService()
+llm_service = LLMService(provider="gemini", model_name="gemini-2.0-flash", memory_service=memory_service)
+
+monitor = BackgroundMonitor(
+    capture_service=capture_service,
+    ocr_service=ocr_service,
+    analysis_service=analysis_service,
+    audio_service=audio_service,
+    memory_service=memory_service,
+    llm_service=llm_service
+)
+
 active_connections: list[WebSocket] = []
 
 async def broadcast_insight(message: str):
@@ -66,6 +86,13 @@ app.include_router(api.router)
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     active_connections.append(websocket)
+    
+    if not monitor.audio_service.using_system_audio:
+        await websocket.send_json({
+            "type": "insight",
+            "content": "⚠️ System audio not detected. Install 'BlackHole' or 'Loopback' for better audio capture. Defaulting to microphone."
+        })
+
     try:
         while True:
             data = await websocket.receive_text()

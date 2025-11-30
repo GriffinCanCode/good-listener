@@ -15,6 +15,7 @@ class AudioService:
         self.is_listening = False
         self.sample_rate = 16000
         self.channels = 1
+        self.using_system_audio = False
         self.device_index = self._find_loopback_device()
         
         # VAD / Buffer settings
@@ -26,14 +27,12 @@ class AudioService:
     def _find_loopback_device(self):
         """Auto-detects BlackHole, Loopback, or Aggregate devices."""
         try:
-            devices = sd.query_devices()
-            for i, device in enumerate(devices):
-                name = device.get('name', '').lower()
-                # Look for common loopback drivers OR Aggregate devices
-                if any(k in name for k in ['blackhole', 'vb-cable', 'loopback', 'aggregate']):
-                    if device['max_input_channels'] > 0:
-                        logger.info(f"Found audio device: {device['name']} (Index {i})")
-                        return i
+            targets = {'blackhole', 'vb-cable', 'loopback', 'aggregate'}
+            for i, dev in enumerate(sd.query_devices()):
+                if dev['max_input_channels'] > 0 and any(t in dev['name'].lower() for t in targets):
+                    logger.info(f"Found audio device: {dev['name']} (Index {i})")
+                    self.using_system_audio = True
+                    return i
             
             logger.warning("No specific loopback device found. Using default input.")
             return None
@@ -57,27 +56,23 @@ class AudioService:
 
     def _audio_callback(self, indata, frames, time_info, status):
         if status:
-            pass 
+            logger.warning(f"Audio status: {status}")
         self.audio_queue.put(indata.copy())
 
     def _audio_loop(self):
         try:
-            # If we found a specific device, use it. Otherwise default.
             stream_params = {
                 'samplerate': self.sample_rate,
                 'channels': self.channels,
-                'callback': self._audio_callback
+                'callback': self._audio_callback,
+                **({'device': self.device_index} if self.device_index is not None else {})
             }
             
-            if self.device_index is not None:
-                stream_params['device'] = self.device_index
-
             with sd.InputStream(**stream_params):
-                logger.info(f"Listening on device index: {self.device_index if self.device_index is not None else 'Default'}")
+                logger.info(f"Listening on device: {self.device_index if self.device_index is not None else 'Default'}")
                 while self.is_listening:
                     while not self.audio_queue.empty():
-                        data = self.audio_queue.get()
-                        self._process_chunk(data)
+                        self._process_chunk(self.audio_queue.get())
                     time.sleep(0.1)
         except Exception as e:
             logger.error(f"Error in audio loop: {e}")
