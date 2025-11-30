@@ -309,13 +309,34 @@ func (c *Client) ExtractText(ctx context.Context, imageData []byte, format strin
 	return result, err
 }
 
-// AnalyzeStream sends a query to the LLM and streams the response.
+// AnalyzeStream sends a query to the LLM and streams the response with retry.
 func (c *Client) AnalyzeStream(ctx context.Context, req *pb.AnalyzeRequest, onChunk func(string)) error {
 	if err := c.cb.Allow(); err != nil {
 		return err
 	}
 
-	stream, err := c.LLM.Analyze(ctx, req)
+	var chunks []string // Buffer to replay on retry
+	err := resilience.Retry(ctx, resilience.LLMRetryConfig(), func() error {
+		stream, err := c.LLM.Analyze(ctx, req)
+		if err != nil {
+			return err
+		}
+		chunks = chunks[:0] // Reset buffer on retry
+
+		for {
+			chunk, err := stream.Recv()
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			if err != nil {
+				return err
+			}
+			if chunk.Content != "" {
+				chunks = append(chunks, chunk.Content)
+			}
+		}
+	})
+
 	if err != nil {
 		if isTransient(err) {
 			c.cb.Failure()
@@ -323,22 +344,12 @@ func (c *Client) AnalyzeStream(ctx context.Context, req *pb.AnalyzeRequest, onCh
 		return err
 	}
 
-	for {
-		chunk, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			c.cb.Success()
-			return nil
-		}
-		if err != nil {
-			if isTransient(err) {
-				c.cb.Failure()
-			}
-			return err
-		}
-		if chunk.Content != "" {
-			onChunk(chunk.Content)
-		}
+	// Deliver all chunks after successful stream
+	for _, chunk := range chunks {
+		onChunk(chunk)
 	}
+	c.cb.Success()
+	return nil
 }
 
 // IsQuestion checks if text is a question.
@@ -417,10 +428,14 @@ func (c *Client) QueryMemory(ctx context.Context, query string, n int32) ([]stri
 	return result, err
 }
 
-// SummarizeTranscript compresses transcript text via LLM summarization.
+// SummarizeTranscript compresses transcript text via LLM summarization with retry.
 func (c *Client) SummarizeTranscript(ctx context.Context, transcript string, maxLength int32) (string, error) {
+	if err := c.cb.Allow(); err != nil {
+		return "", err
+	}
+
 	var result string
-	err := c.withBreaker(func() error {
+	err := resilience.Retry(ctx, resilience.LLMRetryConfig(), func() error {
 		resp, err := c.LLM.SummarizeTranscript(ctx, &pb.SummarizeRequest{
 			Transcript: transcript,
 			MaxLength:  maxLength,
@@ -431,5 +446,13 @@ func (c *Client) SummarizeTranscript(ctx context.Context, transcript string, max
 		result = resp.Summary
 		return nil
 	})
-	return result, err
+
+	if err != nil {
+		if isTransient(err) {
+			c.cb.Failure()
+		}
+		return "", err
+	}
+	c.cb.Success()
+	return result, nil
 }
