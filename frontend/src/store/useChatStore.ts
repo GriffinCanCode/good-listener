@@ -14,12 +14,14 @@ interface ChatState {
   currentSessionId: string | null;
   stream: string;
   status: ConnectionStatus;
+  micEnabled: boolean;
   liveTranscripts: Transcript[];
   autoAnswer: AutoAnswer | null;
   vad: { user: VADState | null; system: VADState | null };
 
   // Actions
   createSession: () => void;
+  setMicEnabled: (enabled: boolean) => void;
   deleteSession: (id: string) => void;
   selectSession: (id: string) => void;
   addMessageToCurrent: (message: Message) => void;
@@ -48,6 +50,7 @@ export const useChatStore = create<ChatState>()(
       currentSessionId: null,
       stream: '',
       status: 'disconnected',
+      micEnabled: false,
       liveTranscripts: [],
       autoAnswer: null,
       vad: { user: null, system: null },
@@ -144,6 +147,7 @@ export const useChatStore = create<ChatState>()(
 
       clearStream: () => set({ stream: '' }),
       setStatus: (status) => set({ status }),
+      setMicEnabled: (enabled) => set({ micEnabled: enabled }),
 
       addTranscript: (text, source, speaker) => {
         set((state) => {

@@ -69,6 +69,7 @@ export const useChatConnection = () => {
   const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(true);
 
+  const micEnabled = useChatStore((s) => s.micEnabled);
   const setStatus = useChatStore((s) => s.setStatus);
   const setStream = useChatStore((s) => s.setStream);
   const appendStreamToContent = useChatStore((s) => s.appendStreamToContent);
@@ -166,29 +167,42 @@ export const useChatConnection = () => {
     updateVAD,
   ]);
 
+  const disconnect = useCallback(() => {
+    if (reconnectTimeout.current) {
+      clearTimeout(reconnectTimeout.current);
+      reconnectTimeout.current = null;
+    }
+    if (ws.current) {
+      ws.current.onopen = null;
+      ws.current.onclose = null;
+      ws.current.onerror = null;
+      ws.current.onmessage = null;
+      if (
+        ws.current.readyState === WebSocket.OPEN ||
+        ws.current.readyState === WebSocket.CONNECTING
+      ) {
+        ws.current.close(1000);
+      }
+      ws.current = null;
+    }
+    setStatus('disconnected');
+  }, [setStatus]);
+
   useEffect(() => {
     mountedRef.current = true;
-    connect();
     return () => {
       mountedRef.current = false;
-      if (reconnectTimeout.current) {
-        clearTimeout(reconnectTimeout.current);
-        reconnectTimeout.current = null;
-      }
-      if (ws.current) {
-        // Detach handlers to prevent callbacks after unmount
-        ws.current.onopen = null;
-        ws.current.onclose = null;
-        ws.current.onerror = null;
-        ws.current.onmessage = null;
-        // Only close if actually open (closing CONNECTING state logs console errors)
-        if (ws.current.readyState === WebSocket.OPEN) {
-          ws.current.close(1000);
-        }
-        ws.current = null;
-      }
     };
-  }, [connect]);
+  }, []);
+
+  // Connect/disconnect based on mic state
+  useEffect(() => {
+    if (micEnabled) {
+      connect();
+    } else {
+      disconnect();
+    }
+  }, [micEnabled, connect, disconnect]);
 
   const sendMessage = useCallback(
     (content: string) => {
