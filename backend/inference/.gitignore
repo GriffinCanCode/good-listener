@@ -1,29 +1,72 @@
-# Virtual environment
-venv/
-
-# Python cache
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+*.manifest
+*.spec
 
-# Generated protobuf files
-app/pb/cognition_pb2.py
-app/pb/cognition_pb2_grpc.py
+# Virtual environments
+venv/
+.venv/
+ENV/
+env/
 
-# Data
-data/
+# Testing
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
 
-# Environment
-.env
+# Type checking
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pytype/
 
-# IDE
+# Linting
+.ruff_cache/
+
+# IDEs
 .idea/
 .vscode/
 *.swp
+*.swo
+*~
+.DS_Store
 
-# Test artifacts
-.pytest_cache/
-.coverage
-htmlcov/
+# Environment
+.env
+.env.local
+*.local
 
+# Generated protobuf files (regenerate with make proto)
+app/pb/*_pb2.py
+app/pb/*_pb2_grpc.py
+
+# Data (large files, models)
+data/models/
+data/chroma_db/
+*.bin
+*.pt
+*.pth
+*.onnx
+!data/.gitkeep
+
+# Logs
+*.log
+logs/
+
+# Jupyter
+.ipynb_checkpoints/
