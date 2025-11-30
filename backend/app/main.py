@@ -1,26 +1,27 @@
+from contextlib import asynccontextmanager
+import asyncio
+import json
+import time
+import uuid
+
+from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from contextlib import asynccontextmanager
 import uvicorn
-import json
-import asyncio
-import time
-from dotenv import load_dotenv
 
-# Load environment variables from .env file
 load_dotenv()
 
-from app.schemas import (
+from app.core import (
+    get_logger, set_correlation_id,
     ChunkPayload, StartPayload, DonePayload, ChatRequest, TranscriptPayload,
-    AutoAnswerStartPayload, AutoAnswerChunkPayload, AutoAnswerDonePayload
+    AutoAnswerStartPayload, AutoAnswerChunkPayload, AutoAnswerDonePayload,
 )
-from app.services.monitor import BackgroundMonitor
-from app.services.llm import LLMService
-from app.services.capture import CaptureService
-from app.services.ocr import OCRService
-from app.services.audio import AudioService
-from app.services.memory import MemoryService
-from app.routers import api
+from app.services import (
+    BackgroundMonitor, LLMService, CaptureService, OCRService, AudioService, MemoryService,
+)
+from app.routers import router as api_router
+
+logger = get_logger(__name__)
 
 # Instantiate services
 capture_service = CaptureService()
@@ -45,7 +46,8 @@ async def broadcast_transcript(text: str, source: str):
     """Sends a live transcript to all connected WebSocket clients."""
     if not active_connections:
         return
-        
+    
+    logger.debug("Broadcasting transcript", source=source, clients=len(active_connections))
     payload = TranscriptPayload(text=text, source=source).model_dump_json()
     tasks = [connection.send_text(payload) for connection in active_connections]
     await asyncio.gather(*tasks, return_exceptions=True)
@@ -57,11 +59,12 @@ async def handle_question_detected(question: str):
     if not active_connections:
         return
     
-    # Cooldown to prevent spam
     now = time.time()
     if now - _last_auto_answer_time < _auto_answer_cooldown:
+        logger.debug("Auto-answer skipped (cooldown)", question=question[:50])
         return
     _last_auto_answer_time = now
+    logger.info("Auto-answering question", question=question[:50])
     
     # Build context from recent transcript and screen
     transcript = monitor.get_recent_transcript(seconds=120)
@@ -91,11 +94,13 @@ async def handle_question_detected(question: str):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("Starting application")
     monitor.on_transcript = broadcast_transcript
     monitor.on_question_detected = handle_question_detected
     app.state.monitor = monitor
     await monitor.start()
     yield
+    logger.info("Shutting down application")
     await monitor.stop()
 
 app = FastAPI(lifespan=lifespan)
@@ -108,12 +113,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(api.router)
+app.include_router(api_router)
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    ws_id = str(uuid.uuid4())[:8]
+    set_correlation_id(ws_id)
+    
     await websocket.accept()
     active_connections.append(websocket)
+    logger.info("WebSocket connected", ws_id=ws_id, total_connections=len(active_connections))
     
     try:
         while True:
@@ -127,9 +136,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 except Exception:
                     continue
 
-                # Build context: screen text + recent transcript
+                logger.info("Chat message received", query_len=len(user_query))
+                
                 screen_text = monitor.latest_text or ""
-                transcript = monitor.get_recent_transcript(seconds=300)  # Last 5 min
+                transcript = monitor.get_recent_transcript(seconds=300)
                 
                 context_parts = []
                 if transcript:
@@ -147,10 +157,11 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         if websocket in active_connections:
             active_connections.remove(websocket)
+        logger.info("WebSocket disconnected", ws_id=ws_id)
     except Exception as e:
         if websocket in active_connections:
             active_connections.remove(websocket)
-        print(f"WebSocket error: {e}")
+        logger.error("WebSocket error", ws_id=ws_id, error=str(e))
 
 if __name__ == "__main__":
     uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)

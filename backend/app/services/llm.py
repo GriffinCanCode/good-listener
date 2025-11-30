@@ -1,17 +1,17 @@
-import os
-import logging
 import base64
 import io
+import os
 from typing import AsyncGenerator, Optional
-from PIL import Image
 
+from langchain_core.messages import HumanMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
-from langchain_core.messages import HumanMessage
-from langchain_core.output_parsers import StrOutputParser
+from PIL import Image
+
+from app.core import get_logger
 from app.services.prompts import ANALYSIS_TEMPLATE
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class LLMService:
     def __init__(self, provider: str = "gemini", model_name: str = "gemini-2.0-flash", memory_service=None):

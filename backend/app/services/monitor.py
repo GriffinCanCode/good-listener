@@ -1,16 +1,18 @@
 import asyncio
-import logging
 import re
 import time
 from collections import deque
-from typing import Optional, Tuple, Callable
-from PIL import Image
-from app.services.capture import CaptureService
-from app.services.ocr import OCRService
-from app.services.audio import AudioService
-from app.services.memory import MemoryService
+from typing import Callable, Optional, Tuple
 
-logger = logging.getLogger(__name__)
+from PIL import Image
+
+from app.core import get_logger
+from app.services.audio import AudioService
+from app.services.capture import CaptureService
+from app.services.memory import MemoryService
+from app.services.ocr import OCRService
+
+logger = get_logger(__name__)
 
 # Question patterns for detection
 QUESTION_STARTERS = re.compile(
@@ -67,7 +69,7 @@ class BackgroundMonitor:
         self._tasks.add(asyncio.create_task(self._transcript_worker()))
         
         self.audio_service.start_listening(self._handle_transcript)
-        logger.info("Background monitor started.")
+        logger.info("Background monitor started", recording=self._is_recording, auto_answer=self._auto_answer_enabled)
 
     async def stop(self):
         self._running = False
@@ -79,7 +81,7 @@ class BackgroundMonitor:
         if self._tasks:
             await asyncio.gather(*self._tasks, return_exceptions=True)
         self._tasks.clear()
-        logger.info("Background monitor stopped.")
+        logger.info("Background monitor stopped", transcripts_buffered=len(self.recent_transcripts))
 
     def _handle_transcript(self, text: str, source: str):
         if not self._running:
@@ -101,7 +103,7 @@ class BackgroundMonitor:
             except asyncio.CancelledError:
                 break
             except Exception as e:
-                logger.error(f"Transcript worker error: {e}")
+                logger.error("Transcript worker error", error=str(e))
 
     async def _process_transcript(self, item: Tuple[str, str]):
         text, source = item
@@ -114,7 +116,7 @@ class BackgroundMonitor:
         
         # Detect questions from system audio (other person on call)
         if self._auto_answer_enabled and source == "system" and is_question(text):
-            logger.info(f"Question detected: {text}")
+            logger.info("Question detected", text=text[:80], source=source)
             if self.on_question_detected:
                 asyncio.create_task(self.on_question_detected(text))
     

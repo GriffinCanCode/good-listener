@@ -1,14 +1,16 @@
-import sounddevice as sd
-import numpy as np
-import torch
-from faster_whisper import WhisperModel
 import queue
 import threading
-import logging
 import time
-from typing import List, Callable, Tuple
+from typing import Callable, List, Tuple
 
-logger = logging.getLogger(__name__)
+import numpy as np
+import sounddevice as sd
+import torch
+from faster_whisper import WhisperModel
+
+from app.core import get_logger
+
+logger = get_logger(__name__)
 
 class DeviceListener:
     def __init__(self, device_index: int, sample_rate: int, transcribe_callback: Callable, vad_threshold: float = 0.5):

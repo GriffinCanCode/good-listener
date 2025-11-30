@@ -1,10 +1,12 @@
 import asyncio
-import logging
+
 import numpy as np
 from PIL import Image
 from rapidocr_onnxruntime import RapidOCR
 
-logger = logging.getLogger(__name__)
+from app.core import get_logger
+
+logger = get_logger(__name__)
 
 class OCRService:
     def __init__(self) -> None:

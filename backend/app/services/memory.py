@@ -1,11 +1,12 @@
-import logging
 import os
 import time
-from typing import List, Dict, Optional
-import chromadb
-from chromadb.config import Settings
+from typing import Dict, List, Optional
 
-logger = logging.getLogger(__name__)
+import chromadb
+
+from app.core import get_logger
+
+logger = get_logger(__name__)
 
 class MemoryService:
     def __init__(self, persistence_path: str = "data/chroma_db"):

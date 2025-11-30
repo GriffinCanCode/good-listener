@@ -1,11 +1,9 @@
-import asyncio
-from fastapi import APIRouter, HTTPException, Request
-import logging
-from app.schemas import CaptureResponse, RecordingStatusResponse
+from fastapi import APIRouter, Request
+
+from app.core import get_logger, CaptureResponse, RecordingStatusResponse
 
 router = APIRouter(prefix="/api", tags=["api"])
-
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @router.get("/capture", response_model=CaptureResponse)
 async def capture_now(request: Request) -> CaptureResponse:
