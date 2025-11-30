@@ -86,7 +86,9 @@ function createWindow() {
     mainWindow.on('closed', () => {
         mainWindow = null;
     });
-    mainWindow.show();
+    mainWindow.once('ready-to-show', () => {
+        mainWindow === null || mainWindow === void 0 ? void 0 : mainWindow.show();
+    });
 }
 electron_1.app.on('ready', () => {
     createWindow();
