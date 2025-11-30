@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-from app.schemas import InsightPayload, ChunkPayload, StartPayload, DonePayload, ChatRequest, TranscriptPayload
+from app.schemas import ChunkPayload, StartPayload, DonePayload, ChatRequest, TranscriptPayload
 from app.services.monitor import BackgroundMonitor
 from app.services.llm import LLMService
 from app.services.capture import CaptureService
@@ -31,19 +31,9 @@ monitor = BackgroundMonitor(
     ocr_service=ocr_service,
     audio_service=audio_service,
     memory_service=memory_service,
-    llm_service=llm_service
 )
 
 active_connections: list[WebSocket] = []
-
-async def broadcast_insight(message: str):
-    """Sends a message to all connected WebSocket clients."""
-    if not active_connections:
-        return
-    
-    payload = InsightPayload(content=message).model_dump_json()
-    tasks = [connection.send_text(payload) for connection in active_connections]
-    await asyncio.gather(*tasks, return_exceptions=True)
 
 async def broadcast_transcript(text: str, source: str):
     """Sends a live transcript to all connected WebSocket clients."""
@@ -56,9 +46,7 @@ async def broadcast_transcript(text: str, source: str):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    monitor.on_insight = broadcast_insight
     monitor.on_transcript = broadcast_transcript
-    # Expose monitor to state so routers can access it
     app.state.monitor = monitor
     await monitor.start()
     yield
@@ -93,16 +81,21 @@ async def websocket_endpoint(websocket: WebSocket):
                 except Exception:
                     continue
 
-                current_text = monitor.latest_text or "No text on screen."
+                # Build context: screen text + recent transcript
+                screen_text = monitor.latest_text or ""
+                transcript = monitor.get_recent_transcript(seconds=300)  # Last 5 min
                 
-                # Signal start of response
+                context_parts = []
+                if transcript:
+                    context_parts.append(f"RECENT CONVERSATION:\n{transcript}")
+                if screen_text:
+                    context_parts.append(f"SCREEN TEXT:\n{screen_text[:2000]}")
+                
+                context = "\n\n".join(context_parts) or "No context available."
+                
                 await websocket.send_json(StartPayload().model_dump())
-                
-                # Stream chunks
-                async for chunk in llm_service.analyze(current_text, user_query, monitor.latest_image):
+                async for chunk in llm_service.analyze(context, user_query, monitor.latest_image):
                     await websocket.send_json(ChunkPayload(content=chunk).model_dump())
-                
-                # Signal completion
                 await websocket.send_json(DonePayload().model_dump())
                 
     except WebSocketDisconnect:

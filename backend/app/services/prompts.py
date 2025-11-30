@@ -34,15 +34,3 @@ ANALYSIS_TEMPLATE = ChatPromptTemplate.from_messages([
     )
 ])
 
-# Monitor Prompt Template
-# Input variables: "transcript", "screen_ctx"
-MONITOR_TEMPLATE = ChatPromptTemplate.from_messages([
-    SystemMessagePromptTemplate.from_template(SYSTEM_PROMPT),
-    HumanMessagePromptTemplate.from_template(
-        'Recent user conversation:\n{transcript}\n\n'
-        'Screen Context: "{screen_ctx}"\n\n'
-        'If this is a question/lookup about the screen, answer it.\n'
-        'If the screen is empty but asked about, describe visuals.\n'
-        'If just chatter, reply "NO_RESPONSE".'
-    )
-])

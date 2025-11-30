@@ -4,10 +4,6 @@ from typing import Literal
 class WebSocketPayload(BaseModel):
     type: str
 
-class InsightPayload(WebSocketPayload):
-    type: Literal["insight"] = "insight"
-    content: str
-
 class TranscriptPayload(WebSocketPayload):
     type: Literal["transcript"] = "transcript"
     text: str

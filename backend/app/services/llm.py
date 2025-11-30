@@ -9,7 +9,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_ollama import ChatOllama
 from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import StrOutputParser
-from app.services.prompts import ANALYSIS_TEMPLATE, MONITOR_TEMPLATE
+from app.services.prompts import ANALYSIS_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -60,25 +60,6 @@ class LLMService:
                 yield chunk.content
         except Exception as e:
             logger.error(f"LLM Error: {e}")
-            yield f"Error: {e}"
-
-    async def monitor_chat(self, transcript: str, screen_ctx: str, image: Optional[Image.Image] = None) -> AsyncGenerator[str, None]:
-        if not self.llm:
-            yield "LLM not configured."
-            return
-
-        prompt_val = MONITOR_TEMPLATE.invoke({
-            "transcript": transcript,
-            "screen_ctx": screen_ctx
-        })
-        messages = prompt_val.to_messages()
-        messages = self._attach_image_if_present(messages, image)
-
-        try:
-            async for chunk in self.llm.astream(messages):
-                yield chunk.content
-        except Exception as e:
-            logger.error(f"Monitor LLM Error: {e}")
             yield f"Error: {e}"
 
     def _attach_image_if_present(self, messages, image: Optional[Image.Image]):

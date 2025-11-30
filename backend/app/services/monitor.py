@@ -7,7 +7,6 @@ from PIL import Image
 from app.services.capture import CaptureService
 from app.services.ocr import OCRService
 from app.services.audio import AudioService
-from app.services.llm import LLMService
 from app.services.memory import MemoryService
 
 logger = logging.getLogger(__name__)
@@ -19,13 +18,11 @@ class BackgroundMonitor:
         ocr_service: OCRService,
         audio_service: AudioService,
         memory_service: MemoryService,
-        llm_service: LLMService,
     ):
         self.capture_service = capture_service
         self.ocr_service = ocr_service
         self.audio_service = audio_service
         self.memory_service = memory_service
-        self.llm_service = llm_service
         
         self._running = False
         self._is_recording = True # Controls writing to vector DB
@@ -34,12 +31,10 @@ class BackgroundMonitor:
         # Store tuples of (timestamp, text, source)
         self.recent_transcripts: deque[Tuple[float, str, str]] = deque(maxlen=30)
         
-        self.latest_insight = ""
         self.latest_text = ""
         self.latest_transcript = ""
         self.latest_image: Optional[Image.Image] = None
-        self.on_insight = None
-        self.on_transcript = None # Callback for live broadcasting
+        self.on_transcript = None  # Callback for live broadcasting
 
     async def start(self):
         self._running = True
@@ -91,29 +86,18 @@ class BackgroundMonitor:
         self.latest_transcript = text
         self.recent_transcripts.append((time.time(), text, source))
         
-        # Filter recent history (last 2 minutes)
-        cutoff = time.time() - 120
-        recent_history = [
+        # Store significant transcripts to memory
+        if self._is_recording and len(text.split()) >= 4:
+            self.memory_service.add_memory(f"{source.upper()}: {text}", "audio")
+    
+    def get_recent_transcript(self, seconds: int = 120) -> str:
+        """Get transcript from the last N seconds for context when user asks."""
+        cutoff = time.time() - seconds
+        return "\n".join(
             f"{src.upper()}: {t}" 
             for ts, t, src in self.recent_transcripts 
             if ts > cutoff
-        ]
-        full_transcript = "\n".join(recent_history)
-        
-        # Only store significant transcripts
-        if self._is_recording and len(text.split()) >= 4:
-            self.memory_service.add_memory(f"{source.upper()}: {text}", "audio")
-        
-        screen_ctx = self.latest_text[:500] if self.latest_text else "No readable text."
-        
-        response = ""
-        async for chunk in self.llm_service.monitor_chat(full_transcript, screen_ctx, self.latest_image):
-            response += chunk
-        
-        if response and "NO_RESPONSE" not in response:
-            self.latest_insight = f"🎤 {text}\n💡 {response}"
-            if self.on_insight:
-                await self.on_insight(self.latest_insight)
+        )
 
     async def _screen_loop(self):
         consecutive_stable_checks = 0
