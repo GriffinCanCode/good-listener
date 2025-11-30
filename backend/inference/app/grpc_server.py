@@ -1,9 +1,5 @@
 """gRPC server exposing inference services to the Go platform."""
 
-import warnings
-# Suppress torchcodec warning - we use in-memory audio which bypasses torchcodec
-warnings.filterwarnings("ignore", message="torchcodec is not installed correctly")
-
 import asyncio
 import io
 import os
@@ -277,16 +273,16 @@ async def serve(port: int = GRPC_DEFAULT_PORT):
     addr = f"[::]:{port}"
     server.add_insecure_port(addr)
 
-    # Graceful shutdown handler
+    # Graceful shutdown using asyncio-safe signal handling
     shutdown_event = asyncio.Event()
+    loop = asyncio.get_running_loop()
 
-    def handle_shutdown(signum, _frame):
-        sig_name = signal.Signals(signum).name
-        logger.info("shutdown_signal_received", signal=sig_name)
+    def handle_shutdown(sig: signal.Signals):
+        logger.info("shutdown_signal_received", signal=sig.name)
         shutdown_event.set()
 
-    signal.signal(signal.SIGTERM, handle_shutdown)
-    signal.signal(signal.SIGINT, handle_shutdown)
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        loop.add_signal_handler(sig, handle_shutdown, sig)
 
     logger.info("grpc_server_starting", addr=addr)
     await server.start()
