@@ -22,7 +22,7 @@ proto-python:
 
 proto-go:
 	@echo "Generating Go protobuf files..."
-	@protoc --go_out=platform/pkg/pb --go_opt=paths=source_relative \
+	@PATH="$$PATH:$$(go env GOPATH)/bin" protoc --go_out=platform/pkg/pb --go_opt=paths=source_relative \
 		--go-grpc_out=platform/pkg/pb --go-grpc_opt=paths=source_relative \
 		-I proto proto/cognition.proto
 

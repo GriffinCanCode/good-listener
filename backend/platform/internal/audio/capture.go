@@ -150,18 +150,27 @@ func (c *Capturer) startDevice(ctx context.Context, info malgo.DeviceInfo, sourc
 		return err
 	}
 
+	dc := &deviceCapture{device: device}
 	c.mu.Lock()
-	c.devices = append(c.devices, &deviceCapture{device: device})
+	c.devices = append(c.devices, dc)
 	c.mu.Unlock()
 
 	// Stop device when context is canceled.
 	go func() {
 		<-ctx.Done()
-		_ = device.Stop()
-		device.Uninit()
+		dc.stop()
 	}()
 
 	return nil
+}
+
+func (d *deviceCapture) stop() {
+	d.stopOnce.Do(func() {
+		if d.device.IsStarted() {
+			_ = d.device.Stop()
+		}
+		d.device.Uninit()
+	})
 }
 
 // Stop stops all audio capture.
@@ -170,8 +179,7 @@ func (c *Capturer) Stop() {
 	defer c.mu.Unlock()
 
 	for _, d := range c.devices {
-		_ = d.device.Stop()
-		d.device.Uninit()
+		d.stop()
 	}
 	c.devices = nil
 	c.running = false
