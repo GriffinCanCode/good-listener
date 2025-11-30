@@ -1,13 +1,15 @@
 import os
-import json
-import httpx
 import logging
-import google.generativeai as genai
+import base64
+import io
 from typing import AsyncGenerator, Optional
 from PIL import Image
-import io
-import base64
-from app.services.prompts import get_analysis_prompt
+
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_ollama import ChatOllama
+from langchain_core.messages import HumanMessage
+from langchain_core.output_parsers import StrOutputParser
+from app.services.prompts import ANALYSIS_TEMPLATE, MONITOR_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -17,86 +19,85 @@ class LLMService:
         self.model_name = model_name
         self.memory_service = memory_service
         
-        # Setup Gemini using GOOGLE_API_KEY (standard) or GEMINI_API_KEY
-        self.gemini_api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        self.api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        if self.api_key:
+            os.environ["GOOGLE_API_KEY"] = self.api_key
+
+        self.llm = self._init_llm()
+
+    def _init_llm(self):
         if self.provider == "gemini":
-            if self.gemini_api_key:
-                genai.configure(api_key=self.gemini_api_key)
-                self.gemini_model = genai.GenerativeModel(self.model_name)
-                logger.info(f"Gemini initialized with model: {self.model_name}")
-            else:
-                logger.warning("Gemini provider selected but no API key found (GOOGLE_API_KEY or GEMINI_API_KEY).")
-                self.gemini_model = None
+            if not self.api_key:
+                logger.warning("Gemini provider selected but no API key found.")
+                return None
+            return ChatGoogleGenerativeAI(model=self.model_name, stream=True)
+        elif self.provider == "ollama":
+            host = os.getenv("OLLAMA_HOST", "http://localhost:11434")
+            return ChatOllama(model=self.model_name, base_url=host)
+        return None
 
     async def analyze(self, context_text: str, user_query: str = "", image: Optional[Image.Image] = None) -> AsyncGenerator[str, None]:
-        memory_context = ""
-        if self.memory_service and user_query:
-            if memories := self.memory_service.query_memory(user_query, n_results=3):
-                memory_context = "\nRelevant Past Context:\n" + "\n".join(f"- {m}" for m in memories)
+        if not self.llm:
+            yield "LLM not configured."
+            return
 
-        prompt = get_analysis_prompt(context_text, memory_context, user_query)
+        # Truncate context to avoid excessive token usage, similar to original logic
+        context_text = context_text[:5000] if context_text else "No text detected via OCR."
+        memory_ctx = self._get_memory_context(user_query)
+        
+        # Format the prompt messages using the template
+        prompt_val = ANALYSIS_TEMPLATE.invoke({
+            "context_text": context_text, 
+            "memory_context": memory_ctx, 
+            "user_query": user_query or "Analyze this screen."
+        })
+        
+        messages = prompt_val.to_messages()
+        messages = self._attach_image_if_present(messages, image)
 
-        if self.provider == "gemini":
-            async for chunk in self._call_gemini(prompt, image):
-                yield chunk
-        elif self.provider == "ollama":
-            async for chunk in self._call_ollama(prompt, image if "llava" in self.model_name else None):
-                yield chunk
-        else:
-            yield "Invalid LLM provider configured."
-
-    async def _call_ollama(self, prompt: str, image: Optional[Image.Image] = None) -> AsyncGenerator[str, None]:
         try:
-            payload = {
-                "model": self.model_name,
-                "prompt": prompt,
-                "stream": True
-            }
-            
-            if image:
-                buffered = io.BytesIO()
-                image.save(buffered, format="JPEG")
-                img_str = base64.b64encode(buffered.getvalue()).decode()
-                payload["images"] = [img_str]
-
-            async with httpx.AsyncClient() as client:
-                async with client.stream(
-                    "POST",
-                    "http://localhost:11434/api/generate",
-                    json=payload,
-                    timeout=30.0
-                ) as response:
-                    if response.status_code != 200:
-                        error_text = ""
-                        try: error_text = (await response.aread()).decode()
-                        except: pass
-                        yield f"Ollama Error: {response.status_code} {error_text}"
-                        return
-
-                    async for line in response.aiter_lines():
-                        if not line: continue
-                        try:
-                            data = json.loads(line)
-                            text = data.get("response", "")
-                            if text: yield text
-                            if data.get("done"): break
-                        except json.JSONDecodeError: continue
+            async for chunk in self.llm.astream(messages):
+                yield chunk.content
         except Exception as e:
-            yield f"Ollama connection failed: {e}"
+            logger.error(f"LLM Error: {e}")
+            yield f"Error: {e}"
 
-    async def _call_gemini(self, prompt: str, image: Optional[Image.Image] = None) -> AsyncGenerator[str, None]:
+    async def monitor_chat(self, transcript: str, screen_ctx: str, image: Optional[Image.Image] = None) -> AsyncGenerator[str, None]:
+        if not self.llm:
+            yield "LLM not configured."
+            return
+
+        prompt_val = MONITOR_TEMPLATE.invoke({
+            "transcript": transcript,
+            "screen_ctx": screen_ctx
+        })
+        messages = prompt_val.to_messages()
+        messages = self._attach_image_if_present(messages, image)
+
         try:
-            if not self.gemini_model:
-                yield "Gemini not configured. Missing API Key."
-                return
-            
-            content = [prompt]
-            if image:
-                content.append(image)
-
-            response = await self.gemini_model.generate_content_async(content, stream=True)
-            async for chunk in response:
-                if chunk.text:
-                    yield chunk.text
+            async for chunk in self.llm.astream(messages):
+                yield chunk.content
         except Exception as e:
-            yield f"Gemini Error: {e}"
+            logger.error(f"Monitor LLM Error: {e}")
+            yield f"Error: {e}"
+
+    def _attach_image_if_present(self, messages, image: Optional[Image.Image]):
+        if image:
+            content_text = messages[-1].content
+            image_data = self._process_image(image)
+            messages[-1] = HumanMessage(content=[
+                {"type": "text", "text": content_text},
+                {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_data}"}}
+            ])
+        return messages
+
+    def _get_memory_context(self, query: str) -> str:
+        if self.memory_service and query:
+            if memories := self.memory_service.query_memory(query, n_results=3):
+                return "\nRelevant Past Context:\n" + "\n".join(f"- {m}" for m in memories)
+        return ""
+
+    def _process_image(self, image: Image.Image) -> str:
+        buffered = io.BytesIO()
+        image.save(buffered, format="JPEG")
+        return base64.b64encode(buffered.getvalue()).decode()

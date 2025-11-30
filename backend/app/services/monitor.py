@@ -4,11 +4,9 @@ from typing import Optional
 from PIL import Image
 from app.services.capture import CaptureService
 from app.services.ocr import OCRService
-from app.services.analysis import AnalysisService
 from app.services.audio import AudioService
 from app.services.llm import LLMService
 from app.services.memory import MemoryService
-from app.services.prompts import get_monitor_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -17,14 +15,12 @@ class BackgroundMonitor:
         self,
         capture_service: CaptureService,
         ocr_service: OCRService,
-        analysis_service: AnalysisService,
         audio_service: AudioService,
         memory_service: MemoryService,
         llm_service: LLMService,
     ):
         self.capture_service = capture_service
         self.ocr_service = ocr_service
-        self.analysis_service = analysis_service
         self.audio_service = audio_service
         self.memory_service = memory_service
         self.llm_service = llm_service
@@ -88,10 +84,9 @@ class BackgroundMonitor:
             self.memory_service.add_memory(text, "audio")
         
         screen_ctx = self.latest_text[:500] if self.latest_text else "No readable text."
-        prompt = get_monitor_prompt(text, screen_ctx)
         
         response = ""
-        async for chunk in self.llm_service.analyze(self.latest_text, prompt, self.latest_image):
+        async for chunk in self.llm_service.monitor_chat(text, screen_ctx, self.latest_image):
             response += chunk
         
         if response and "NO_RESPONSE" not in response:
@@ -102,14 +97,28 @@ class BackgroundMonitor:
     async def _screen_loop(self):
         consecutive_stable_checks = 0
         last_stored_text = ""
+        last_visual_hash = None
 
         while self._running:
             try:
                 if image := self.capture_service.capture_screen():
+                    # Quick visual check using downsampling + hashing
+                    # Resize to 32x32 to detect meaningful changes only
+                    small_img = image.resize((32, 32), Image.Resampling.NEAREST).convert("L")
+                    current_hash = hash(small_img.tobytes())
+
+                    if current_hash == last_visual_hash:
+                        # Screen hasn't changed visually, skip expensive OCR
+                        await asyncio.sleep(0.5)
+                        continue
+                    
+                    last_visual_hash = current_hash
                     self.latest_image = image
+                    
+                    # Visual change detected, run OCR
                     text = await self.ocr_service.extract_text_async(image)
                     
-                    # Debounce/Stabilize: Only update if text changes
+                    # Update latest text immediately if changed
                     if text != self.latest_text:
                          self.latest_text = text
                          consecutive_stable_checks = 0
@@ -119,16 +128,20 @@ class BackgroundMonitor:
                     # Store only if stable for a few cycles and different from what we last stored
                     # and contains enough content
                     if (self._is_recording and 
-                        consecutive_stable_checks == 2 and 
+                        consecutive_stable_checks >= 2 and 
                         text != last_stored_text and 
                         len(text) > 50):
                         
                         self.memory_service.add_memory(text, "screen")
                         last_stored_text = text
+                        # Reset check count to avoid spamming the same memory
+                        consecutive_stable_checks = 0
                         
             except Exception as e:
                 logger.error(f"Screen loop error: {e}")
-            await asyncio.sleep(5)
+            
+            # Adaptive polling: faster when active
+            await asyncio.sleep(1)
 
     def set_recording(self, active: bool):
         self._is_recording = active
