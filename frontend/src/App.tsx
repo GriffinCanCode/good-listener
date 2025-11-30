@@ -18,20 +18,20 @@ const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [showTranscript, setShowTranscript] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
-  
-  const { 
-    sessions, 
-    stream, 
-    status, 
-    createSession, 
+
+  const {
+    sessions,
+    stream,
+    status,
+    createSession,
     getCurrentSession,
     autoAnswer,
     dismissAutoAnswer
   } = useChatStore();
-  
+
   const { isSidebarOpen, toggleSidebar } = useUIStore();
   const { sendMessage } = useChatConnection();
-  
+
   const currentSession = getCurrentSession();
   const messages = currentSession?.messages || [];
 
@@ -49,19 +49,14 @@ const App: React.FC = () => {
 
   // Electron listeners
   useEffect(() => {
-    const onWindowShown = () => console.log('Window shown');
-    window.electronAPI?.onWindowShown(onWindowShown);
-    return () => {
-      window.electronAPI?.removeAllWindowShownListeners();
-    };
+    const cleanup = window.electron?.window.onShown(() => console.log('Window shown'));
+    return () => cleanup?.();
   }, []);
 
   // Handle Window Resizing
   useEffect(() => {
-    if (window.electronAPI) {
-      const targetWidth = showTranscript ? DEFAULT_WIDTH + TRANSCRIPT_WIDTH : DEFAULT_WIDTH;
-      window.electronAPI.resize(targetWidth, DEFAULT_HEIGHT);
-    }
+    const targetWidth = showTranscript ? DEFAULT_WIDTH + TRANSCRIPT_WIDTH : DEFAULT_WIDTH;
+    window.electron?.window.resize(targetWidth, DEFAULT_HEIGHT);
   }, [showTranscript]);
 
   const handleSend = () => {
@@ -87,15 +82,15 @@ const App: React.FC = () => {
             <span>Good Listener</span>
           </div>
           <div className="header-right no-drag" style={{ display: 'flex', gap: '8px' }}>
-            <button 
-                onClick={() => setShowTranscript(!showTranscript)} 
+            <button
+                onClick={() => setShowTranscript(!showTranscript)}
                 className={`icon-btn ${showTranscript ? 'active' : ''}`}
                 title="Toggle Live Transcript"
             >
                 <FileText size={20} />
             </button>
-            <button 
-                onClick={() => fetch(`${API_BASE}/api/capture`).catch(console.error)} 
+            <button
+                onClick={() => fetch(`${API_BASE}/api/capture`).catch(console.error)}
                 className="icon-btn capture-btn"
                 title="Capture Screen"
             >
@@ -151,8 +146,8 @@ const App: React.FC = () => {
             <div className="chat-area">
             {messages.length === 0 && !stream ? (
                 <div className="empty-state">
-                <motion.div 
-                    initial={{ opacity: 0 }} 
+                <motion.div
+                    initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.2 }}
                     className="welcome-hero"
@@ -166,9 +161,9 @@ const App: React.FC = () => {
                 <>
                 <div className="chat-spacer" />
                 {messages.map((m, i) => (
-                    <motion.div 
-                    key={i} 
-                    initial={{ opacity: 0, y: 8 }} 
+                    <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.15, ease: 'easeOut' }}
                     className={`message ${m.role}`}
@@ -177,8 +172,8 @@ const App: React.FC = () => {
                     </motion.div>
                 ))}
                 {stream && (
-                    <motion.div 
-                    initial={{ opacity: 0 }} 
+                    <motion.div
+                    initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     transition={{ duration: 0.1 }}
                     className="message assistant"
@@ -193,13 +188,13 @@ const App: React.FC = () => {
 
             <AnimatePresence>
                 {showTranscript && (
-                    <motion.div 
+                    <motion.div
                         initial={{ x: 20, opacity: 0 }}
                         animate={{ x: 0, opacity: 1 }}
                         exit={{ x: 20, opacity: 0 }}
                         transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
                         className="live-transcript-wrapper"
-                        style={{ position: 'relative', width: 320, flexShrink: 0 }} 
+                        style={{ position: 'relative', width: 320, flexShrink: 0 }}
                     >
                         <div className="transcript-header">
                             <h3>Live Transcript</h3>
@@ -215,9 +210,9 @@ const App: React.FC = () => {
 
         <div className="input-area">
           <div className="input-wrapper">
-            <textarea 
-              value={input} 
-              onChange={e => setInput(e.target.value)} 
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && !e.shiftKey && (e.preventDefault(), handleSend())}
               placeholder="Type a message..."
               rows={1}

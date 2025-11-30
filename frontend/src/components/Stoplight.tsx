@@ -2,8 +2,8 @@ import React from 'react';
 
 export const Stoplight: React.FC = () => {
   const handle = (action: 'close' | 'minimize' | 'maximize') => (e: React.MouseEvent) => {
-    e.stopPropagation(); // Prevent drag
-    window.electronAPI?.[action]();
+    e.stopPropagation();
+    window.electron?.window[action]();
   };
 
   return (
