@@ -29,7 +29,7 @@ type Orchestrator struct {
 	cfg       *config.Config
 
 	audioCap  *audio.Capturer
-	screenCap *screen.Capturer
+	screenCap screen.Capturer
 
 	// State
 	mu                sync.RWMutex
@@ -61,6 +61,7 @@ type vadState struct {
 	speechBuffer  []float32
 	isSpeaking    bool
 	silenceChunks int
+	lastSeen      time.Time
 }
 
 // New creates a new orchestrator
@@ -74,7 +75,7 @@ func New(inference *grpcclient.Client, cfg *config.Config) *Orchestrator {
 		inference:    inference,
 		cfg:          cfg,
 		audioCap:     audioCap,
-		screenCap:    screen.NewCapturer(),
+		screenCap:    screen.New(),
 		recording:    true,
 		autoAnswer:   cfg.AutoAnswerEnabled,
 		transcriptCh: make(chan TranscriptEvent, 100),
@@ -98,8 +99,39 @@ func (o *Orchestrator) Start(ctx context.Context) error {
 	}
 
 	go o.screenLoop(ctx)
+	go o.vadCleanupLoop(ctx)
 
 	return nil
+}
+
+// vadCleanupLoop periodically removes stale VAD state entries
+func (o *Orchestrator) vadCleanupLoop(ctx context.Context) {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-o.stopCh:
+			return
+		case <-ticker.C:
+			o.cleanupStaleVADState()
+		}
+	}
+}
+
+func (o *Orchestrator) cleanupStaleVADState() {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+
+	staleThreshold := time.Now().Add(-5 * time.Minute)
+	for key, state := range o.vadState {
+		if state.lastSeen.Before(staleThreshold) {
+			delete(o.vadState, key)
+			slog.Debug("cleaned up stale VAD state", "device", key)
+		}
+	}
 }
 
 // Stop stops orchestration
@@ -108,6 +140,9 @@ func (o *Orchestrator) Stop() {
 	if o.audioCap != nil {
 		o.audioCap.Stop()
 	}
+	o.mu.Lock()
+	o.vadState = make(map[string]*vadState)
+	o.mu.Unlock()
 }
 
 func (o *Orchestrator) audioLoop(ctx context.Context) {
@@ -129,8 +164,10 @@ func (o *Orchestrator) processAudioChunk(ctx context.Context, chunk audio.Chunk)
 	o.mu.Lock()
 	state, ok := o.vadState[deviceKey]
 	if !ok {
-		state = &vadState{}
+		state = &vadState{lastSeen: time.Now()}
 		o.vadState[deviceKey] = state
+	} else {
+		state.lastSeen = time.Now()
 	}
 	o.mu.Unlock()
 
