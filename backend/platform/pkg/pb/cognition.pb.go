@@ -89,6 +89,17 @@ type StoreResponse struct {
 	Success bool
 }
 
+// BatchStoreRequest is the request to batch store memories
+type BatchStoreRequest struct {
+	Items []*StoreRequest
+}
+
+// BatchStoreResponse is the response from batch storing memories
+type BatchStoreResponse struct {
+	Ids         []string
+	StoredCount int32
+}
+
 // QueryRequest is the request to query memory
 type QueryRequest struct {
 	QueryText    string

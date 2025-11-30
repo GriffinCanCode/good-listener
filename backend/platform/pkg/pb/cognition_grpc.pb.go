@@ -166,6 +166,7 @@ func (c *llmServiceClient) IsQuestion(ctx context.Context, in *IsQuestionRequest
 // MemoryServiceClient is the client API for MemoryService
 type MemoryServiceClient interface {
 	Store(ctx context.Context, in *StoreRequest, opts ...grpc.CallOption) (*StoreResponse, error)
+	BatchStore(ctx context.Context, in *BatchStoreRequest, opts ...grpc.CallOption) (*BatchStoreResponse, error)
 	Query(ctx context.Context, in *QueryRequest, opts ...grpc.CallOption) (*QueryResponse, error)
 	Clear(ctx context.Context, in *ClearRequest, opts ...grpc.CallOption) (*ClearResponse, error)
 }
@@ -181,6 +182,12 @@ func NewMemoryServiceClient(cc grpc.ClientConnInterface) MemoryServiceClient {
 func (c *memoryServiceClient) Store(ctx context.Context, in *StoreRequest, opts ...grpc.CallOption) (*StoreResponse, error) {
 	out := new(StoreResponse)
 	err := c.cc.Invoke(ctx, "/cognition.MemoryService/Store", in, out, opts...)
+	return out, err
+}
+
+func (c *memoryServiceClient) BatchStore(ctx context.Context, in *BatchStoreRequest, opts ...grpc.CallOption) (*BatchStoreResponse, error) {
+	out := new(BatchStoreResponse)
+	err := c.cc.Invoke(ctx, "/cognition.MemoryService/BatchStore", in, out, opts...)
 	return out, err
 }
 

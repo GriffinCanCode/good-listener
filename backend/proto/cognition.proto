@@ -107,6 +107,7 @@ message IsQuestionResponse {
 
 service MemoryService {
     rpc Store(StoreRequest) returns (StoreResponse);
+    rpc BatchStore(BatchStoreRequest) returns (BatchStoreResponse);
     rpc Query(QueryRequest) returns (QueryResponse);
     rpc Clear(ClearRequest) returns (ClearResponse);
 }
@@ -120,6 +121,15 @@ message StoreRequest {
 message StoreResponse {
     string id = 1;
     bool success = 2;
+}
+
+message BatchStoreRequest {
+    repeated StoreRequest items = 1;
+}
+
+message BatchStoreResponse {
+    repeated string ids = 1;
+    int32 stored_count = 2;
 }
 
 message QueryRequest {
