@@ -44,6 +44,8 @@ async def broadcast_insight(message: str):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     monitor.on_insight = broadcast_insight
+    # Expose monitor to state so routers can access it
+    app.state.monitor = monitor
     await monitor.start()
     yield
     await monitor.stop()
