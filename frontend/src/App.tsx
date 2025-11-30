@@ -43,13 +43,6 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally run only on mount
   }, []);
 
-  // Scroll to bottom on messages/stream change (only if there's content)
-  useEffect(() => {
-    if (messages.length > 0 || stream) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [messages.length, stream]);
-
   // Electron listeners
   useEffect(() => {
     const cleanup = window.electron?.window.onShown(() => console.log('Window shown'));
