@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion';
+import gsap from 'gsap';
 import {
   Camera,
   FileText,
@@ -12,10 +12,14 @@ import {
 import React, { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { LiveTranscript } from './components/LiveTranscript';
+import { MicButton } from './components/MicButton';
+import { Presence } from './components/Presence';
 import { Sidebar } from './components/Sidebar';
 import { Stoplight } from './components/Stoplight';
 import { VoiceActivityIndicator } from './components/VoiceActivityIndicator';
+import { useAutoScroll } from './hooks/useAutoScroll';
 import { useChatConnection } from './hooks/useChatConnection';
+import { duration, ease } from './lib/animations';
 import { useChatStore } from './store/useChatStore';
 import { useUIStore } from './store/useUIStore';
 
@@ -24,10 +28,167 @@ const DEFAULT_WIDTH = 400;
 const TRANSCRIPT_WIDTH = 320;
 const DEFAULT_HEIGHT = 600;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// Auto Answer Card - With smooth GSAP animations
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface AutoAnswerCardProps {
+  autoAnswer: { question: string; content: string; isStreaming: boolean };
+  onDismiss: () => void;
+}
+
+const AutoAnswerCard: React.FC<AutoAnswerCardProps> = ({ autoAnswer, onDismiss }) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      gsap.fromTo(
+        ref.current,
+        { opacity: 0, y: -20, scale: 0.95 },
+        { opacity: 1, y: 0, scale: 1, duration: duration.smooth, ease: ease.bounce }
+      );
+    }
+  }, []);
+
+  return (
+    <div ref={ref} className="auto-answer-card">
+      <div className="auto-answer-header">
+        <div className="auto-answer-badge">
+          <Zap size={14} />
+          <span>Question Detected</span>
+        </div>
+        <button onClick={onDismiss} className="icon-btn auto-dismiss">
+          <X size={14} />
+        </button>
+      </div>
+      <div className="auto-answer-question">
+        <MessageCircleQuestion size={16} />
+        <span>"{autoAnswer.question}"</span>
+      </div>
+      <div className="auto-answer-content">
+        {autoAnswer.content ? (
+          <ReactMarkdown>{autoAnswer.content}</ReactMarkdown>
+        ) : (
+          <div className="auto-answer-loading">
+            <span className="pulse-dot" />
+            <span className="pulse-dot" />
+            <span className="pulse-dot" />
+          </div>
+        )}
+      </div>
+      {autoAnswer.isStreaming && autoAnswer.content && (
+        <div className="auto-answer-streaming">
+          <span className="streaming-indicator" />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Message Component - Individual chat message with enter animation
+// ═══════════════════════════════════════════════════════════════════════════
+
+interface MessageProps {
+  content: string;
+  role: 'user' | 'assistant';
+  index: number;
+}
+
+const Message: React.FC<MessageProps> = ({ content, role, index }) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      gsap.fromTo(
+        ref.current,
+        { opacity: 0, y: 12 },
+        { opacity: 1, y: 0, duration: duration.normal, ease: ease.butter, delay: index * 0.02 }
+      );
+    }
+  }, [index]);
+
+  return (
+    <div ref={ref} className={`message ${role}`}>
+      <ReactMarkdown>{content}</ReactMarkdown>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Stream Message - Currently streaming message
+// ═══════════════════════════════════════════════════════════════════════════
+
+const StreamMessage: React.FC<{ content: string }> = ({ content }) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      gsap.fromTo(
+        ref.current,
+        { opacity: 0 },
+        { opacity: 1, duration: duration.fast, ease: ease.silk }
+      );
+    }
+  }, []);
+
+  return (
+    <div ref={ref} className="message assistant">
+      <ReactMarkdown>{content}</ReactMarkdown>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Welcome Hero - Empty state
+// ═══════════════════════════════════════════════════════════════════════════
+
+const WelcomeHero: React.FC = () => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ref.current) {
+      gsap.fromTo(
+        ref.current,
+        { opacity: 0, y: 16, scale: 0.98 },
+        { opacity: 1, y: 0, scale: 1, duration: duration.smooth, ease: ease.butter }
+      );
+    }
+  }, []);
+
+  return (
+    <div ref={ref} className="welcome-hero">
+      <Sparkles size={48} className="hero-icon" />
+      <h1>Ready to Listen</h1>
+      <p>Ask me anything about what's on your screen.</p>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Transcript Panel - Slide-in panel with GSAP
+// ═══════════════════════════════════════════════════════════════════════════
+
+const TranscriptPanel: React.FC = () => (
+  <div
+    className="live-transcript-wrapper"
+    style={{ position: 'relative', width: 320, flexShrink: 0 }}
+  >
+    <div className="transcript-header">
+      <h3>Live Transcript</h3>
+    </div>
+    <VoiceActivityIndicator />
+    <LiveTranscript />
+  </div>
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Main App Component
+// ═══════════════════════════════════════════════════════════════════════════
+
 const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [showTranscript, setShowTranscript] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
 
   const { stream, status, createSession, getCurrentSession, autoAnswer, dismissAutoAnswer } =
     useChatStore();
@@ -37,6 +198,7 @@ const App: React.FC = () => {
 
   const currentSession = getCurrentSession();
   const messages = currentSession?.messages ?? [];
+  const { containerRef } = useAutoScroll([messages, stream]);
 
   // Always start with a fresh conversation
   useEffect(() => {
@@ -79,6 +241,7 @@ const App: React.FC = () => {
             <span>Good Listener</span>
           </div>
           <div className="header-right no-drag" style={{ display: 'flex', gap: '8px' }}>
+            <MicButton />
             <button
               onClick={() => setShowTranscript(!showTranscript)}
               className={`icon-btn ${showTranscript ? 'active' : ''}`}
@@ -98,112 +261,35 @@ const App: React.FC = () => {
 
         <div className="chat-container">
           {/* Auto-Answer Card - Shows when question detected */}
-          <AnimatePresence>
+          <Presence animation="scaleUp">
             {autoAnswer && (
-              <motion.div
-                initial={{ opacity: 0, y: -20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-                className="auto-answer-card"
-              >
-                <div className="auto-answer-header">
-                  <div className="auto-answer-badge">
-                    <Zap size={14} />
-                    <span>Question Detected</span>
-                  </div>
-                  <button onClick={dismissAutoAnswer} className="icon-btn auto-dismiss">
-                    <X size={14} />
-                  </button>
-                </div>
-                <div className="auto-answer-question">
-                  <MessageCircleQuestion size={16} />
-                  <span>"{autoAnswer.question}"</span>
-                </div>
-                <div className="auto-answer-content">
-                  {autoAnswer.content ? (
-                    <ReactMarkdown>{autoAnswer.content}</ReactMarkdown>
-                  ) : (
-                    <div className="auto-answer-loading">
-                      <span className="pulse-dot" />
-                      <span className="pulse-dot" />
-                      <span className="pulse-dot" />
-                    </div>
-                  )}
-                </div>
-                {autoAnswer.isStreaming && autoAnswer.content && (
-                  <div className="auto-answer-streaming">
-                    <span className="streaming-indicator" />
-                  </div>
-                )}
-              </motion.div>
+              <AutoAnswerCard
+                key="auto-answer"
+                autoAnswer={autoAnswer}
+                onDismiss={dismissAutoAnswer}
+              />
             )}
-          </AnimatePresence>
+          </Presence>
 
-          <div className="chat-area">
+          <div ref={containerRef} className="chat-area">
             {messages.length === 0 && !stream ? (
               <div className="empty-state">
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.2 }}
-                  className="welcome-hero"
-                >
-                  <Sparkles size={48} className="hero-icon" />
-                  <h1>Ready to Listen</h1>
-                  <p>Ask me anything about what's on your screen.</p>
-                </motion.div>
+                <WelcomeHero />
               </div>
             ) : (
               <>
                 <div className="chat-spacer" />
                 {messages.map((m, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.15, ease: 'easeOut' }}
-                    className={`message ${m.role}`}
-                  >
-                    <ReactMarkdown>{m.content}</ReactMarkdown>
-                  </motion.div>
+                  <Message key={i} content={m.content} role={m.role} index={i} />
                 ))}
-                {stream && (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.1 }}
-                    className="message assistant"
-                  >
-                    <ReactMarkdown>{stream}</ReactMarkdown>
-                  </motion.div>
-                )}
+                {stream && <StreamMessage content={stream} />}
               </>
             )}
-            <div ref={bottomRef} />
           </div>
 
-          <AnimatePresence>
-            {showTranscript && (
-              <motion.div
-                initial={{ x: 20, opacity: 0 }}
-                animate={{ x: 0, opacity: 1 }}
-                exit={{ x: 20, opacity: 0 }}
-                transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
-                className="live-transcript-wrapper"
-                style={{ position: 'relative', width: 320, flexShrink: 0 }}
-              >
-                <div className="transcript-header">
-                  <h3>Live Transcript</h3>
-                  <button onClick={() => setShowTranscript(false)} className="icon-btn">
-                    <X size={16} />
-                  </button>
-                </div>
-                <VoiceActivityIndicator />
-                <LiveTranscript />
-              </motion.div>
-            )}
-          </AnimatePresence>
+          <Presence animation="slideLeft">
+            {showTranscript && <TranscriptPanel key="transcript" />}
+          </Presence>
         </div>
 
         <div className="input-area">

@@ -66,5 +66,11 @@ export function getMainWindow(): BrowserWindow | null {
 }
 
 export function resizeWindow(width: number, height: number): void {
-  mainWindow?.setSize(width, height, true);
+  if (!mainWindow) return;
+
+  // Keep right edge anchored - expand/contract to the left
+  const bounds = mainWindow.getBounds();
+  const newX = bounds.x + (bounds.width - width);
+
+  mainWindow.setBounds({ x: newX, y: bounds.y, width, height }, true);
 }
