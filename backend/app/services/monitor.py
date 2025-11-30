@@ -84,12 +84,10 @@ class BackgroundMonitor:
             await asyncio.sleep(5)
 
     async def _process_screen(self):
-        image = self.capture_service.capture_screen()
-        if not image:
+        if not (image := self.capture_service.capture_screen()):
             return
 
-        text = self.ocr_service.extract_text(image)
-        if not text:
+        if not (text := await asyncio.to_thread(self.ocr_service.extract_text, image)):
             return
 
         self.latest_text = text

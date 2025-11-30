@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, HTTPException
 from app.services.capture import CaptureService
 from app.services.ocr import OCRService
@@ -12,11 +13,10 @@ logger = logging.getLogger(__name__)
 @router.get("/capture")
 async def capture_now() -> dict[str, str]:
     """Triggers an immediate screen capture and OCR."""
-    image = capture_service.capture_screen()
-    if not image:
+    if not (image := capture_service.capture_screen()):
         raise HTTPException(status_code=500, detail="Failed to capture screen")
     
-    text = ocr_service.extract_text(image)
+    text = await asyncio.to_thread(ocr_service.extract_text, image)
     
     return {
         "message": "Screen processed", 

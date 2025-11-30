@@ -1,18 +1,25 @@
-import pytesseract
+import asyncio
+import logging
+import numpy as np
 from PIL import Image
-import sys
+from rapidocr_onnxruntime import RapidOCR
+
+logger = logging.getLogger(__name__)
 
 class OCRService:
     def __init__(self) -> None:
-        # Ensure tesseract is in path or configured here if needed
-        pass
+        try:
+            self.engine = RapidOCR()
+            logger.info("RapidOCR initialized.")
+        except Exception as e:
+            logger.error(f"RapidOCR init failed: {e}")
+            self.engine = None
 
     def extract_text(self, image: Image.Image) -> str:
-        """Extracts text from a PIL Image using Tesseract OCR."""
+        if not self.engine: return ""
         try:
-            text = pytesseract.image_to_string(image)
-            return text.strip()
+            result, _ = self.engine(np.array(image))
+            return "\n".join(r[1] for r in result if r[1]).strip() if result else ""
         except Exception as e:
-            print(f"OCR Error: {e}")
+            logger.error(f"OCR Error: {e}")
             return ""
-
