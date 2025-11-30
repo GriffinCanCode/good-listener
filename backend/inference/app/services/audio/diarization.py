@@ -37,11 +37,12 @@ class DiarizationService:
             try:
                 import torch
                 from pyannote.audio import Pipeline
+                from pyannote.audio.core.task import Specifications
 
                 self._torch = torch
                 self.device = torch.device(self.device_name)
-                # Whitelist TorchVersion for pyannote checkpoints (PyTorch 2.6+ security)
-                with torch.serialization.safe_globals([torch.torch_version.TorchVersion]):
+                # Whitelist for pyannote checkpoints (PyTorch 2.6+ security)
+                with torch.serialization.safe_globals([torch.torch_version.TorchVersion, Specifications]):
                     self._pipeline = Pipeline.from_pretrained(self.model_name, token=self.auth_token)
                 self._pipeline.to(self.device)
                 logger.info(f"DiarizationService initialized: model={self.model_name}, device={self.device_name}")
