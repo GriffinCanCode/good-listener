@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import type { AutoAnswer, ConnectionStatus, Message, Session, Transcript } from '../types';
+import type {
+  AutoAnswer,
+  ConnectionStatus,
+  Message,
+  Session,
+  Transcript,
+  VADState,
+} from '../types';
 
 interface ChatState {
   sessions: Session[];
@@ -9,6 +16,7 @@ interface ChatState {
   status: ConnectionStatus;
   liveTranscripts: Transcript[];
   autoAnswer: AutoAnswer | null;
+  vad: { user: VADState | null; system: VADState | null };
 
   // Actions
   createSession: () => void;
@@ -27,6 +35,7 @@ interface ChatState {
   appendAutoAnswer: (content: string) => void;
   finishAutoAnswer: () => void;
   dismissAutoAnswer: () => void;
+  updateVAD: (probability: number, isSpeech: boolean, source: 'user' | 'system') => void;
 
   // Computeds
   getCurrentSession: () => Session | undefined;
@@ -41,6 +50,7 @@ export const useChatStore = create<ChatState>()(
       status: 'disconnected',
       liveTranscripts: [],
       autoAnswer: null,
+      vad: { user: null, system: null },
 
       getCurrentSession: () => {
         const { sessions, currentSessionId } = get();
@@ -191,6 +201,11 @@ export const useChatStore = create<ChatState>()(
         })),
 
       dismissAutoAnswer: () => set({ autoAnswer: null }),
+
+      updateVAD: (probability, isSpeech, source) =>
+        set((state) => ({
+          vad: { ...state.vad, [source]: { probability, isSpeech, source, timestamp: Date.now() } },
+        })),
     }),
     {
       name: 'chat_sessions',

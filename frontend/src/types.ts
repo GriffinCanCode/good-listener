@@ -26,4 +26,11 @@ export interface AutoAnswer {
   timestamp: number;
 }
 
+export interface VADState {
+  probability: number;
+  isSpeech: boolean;
+  source: 'user' | 'system';
+  timestamp: number;
+}
+
 export type ConnectionStatus = 'connected' | 'disconnected';

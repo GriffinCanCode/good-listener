@@ -23,6 +23,9 @@ type VADClient interface {
 // SpeechHandler handles completed speech segments.
 type SpeechHandler func(ctx context.Context, audio []float32, source string)
 
+// VADHandler receives VAD probability updates.
+type VADHandler func(prob float32, isSpeech bool, source string)
+
 // vadState tracks VAD state per device.
 type vadState struct {
 	buffer        []float32
@@ -45,13 +48,14 @@ type Processor struct {
 	vad          VADClient
 	cfg          Config
 	onSpeech     SpeechHandler
+	onVAD        VADHandler
 	mu           sync.Mutex
 	vadState     map[string]*vadState
 	staleTimeout time.Duration
 }
 
 // NewProcessor creates an audio processor.
-func NewProcessor(vad VADClient, cfg Config, onSpeech SpeechHandler) *Processor {
+func NewProcessor(vad VADClient, cfg Config, onSpeech SpeechHandler, onVAD VADHandler) *Processor {
 	if cfg.MinSpeechSamples == 0 {
 		cfg.MinSpeechSamples = cfg.SampleRate / 2
 	}
@@ -59,6 +63,7 @@ func NewProcessor(vad VADClient, cfg Config, onSpeech SpeechHandler) *Processor 
 		vad:          vad,
 		cfg:          cfg,
 		onSpeech:     onSpeech,
+		onVAD:        onVAD,
 		vadState:     make(map[string]*vadState),
 		staleTimeout: StaleStateTimeout,
 	}
@@ -90,6 +95,11 @@ func (p *Processor) ProcessChunk(ctx context.Context, chunk audiocap.Chunk) {
 				slog.Debug("VAD error", "error", err)
 			}
 			continue
+		}
+
+		// Emit VAD event for visualization
+		if p.onVAD != nil {
+			p.onVAD(prob, isSpeech, chunk.Source)
 		}
 
 		if isSpeech || prob > float32(p.cfg.VADThreshold) {

@@ -14,6 +14,7 @@ import ReactMarkdown from 'react-markdown';
 import { LiveTranscript } from './components/LiveTranscript';
 import { Sidebar } from './components/Sidebar';
 import { Stoplight } from './components/Stoplight';
+import { VoiceActivityIndicator } from './components/VoiceActivityIndicator';
 import { useChatConnection } from './hooks/useChatConnection';
 import { useChatStore } from './store/useChatStore';
 import { useUIStore } from './store/useUIStore';
@@ -198,6 +199,7 @@ const App: React.FC = () => {
                     <X size={16} />
                   </button>
                 </div>
+                <VoiceActivityIndicator />
                 <LiveTranscript />
               </motion.div>
             )}

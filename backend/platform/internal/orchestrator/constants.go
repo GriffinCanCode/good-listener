@@ -18,6 +18,7 @@ const (
 
 	// Channel buffer sizes
 	AutoAnswerChannelBuffer = 10
+	VADChannelBuffer        = 50
 
 	// Speech processing thresholds
 	MinWordsForMemoryStorage = 4

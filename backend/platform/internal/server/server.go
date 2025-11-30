@@ -68,6 +68,13 @@ type RateLimitedMessage struct {
 	Message string `json:"message"`
 }
 
+type VADMessage struct {
+	Type        string  `json:"type"`
+	Probability float32 `json:"probability"`
+	IsSpeech    bool    `json:"is_speech"`
+	Source      string  `json:"source"`
+}
+
 // rateLimiter tracks message timestamps using a sliding window.
 type rateLimiter struct {
 	timestamps []time.Time
@@ -118,6 +125,7 @@ func New(orch *orchestrator.Orchestrator, _ *config.Config) *Server {
 	// Start broadcasters
 	go s.broadcastTranscripts()
 	go s.broadcastAutoAnswers()
+	go s.broadcastVAD()
 
 	return s
 }
@@ -288,6 +296,25 @@ func (s *Server) broadcastAutoAnswers() {
 		s.mu.RLock()
 		for conn := range s.conns {
 			go func(c *websocket.Conn, m interface{}) {
+				_ = wsjson.Write(context.Background(), c, m)
+			}(conn, msg)
+		}
+		s.mu.RUnlock()
+	}
+}
+
+func (s *Server) broadcastVAD() {
+	for evt := range s.orch.VADEvents() {
+		msg := VADMessage{
+			Type:        "vad",
+			Probability: evt.Probability,
+			IsSpeech:    evt.IsSpeech,
+			Source:      evt.Source,
+		}
+
+		s.mu.RLock()
+		for conn := range s.conns {
+			go func(c *websocket.Conn, m VADMessage) {
 				_ = wsjson.Write(context.Background(), c, m)
 			}(conn, msg)
 		}
