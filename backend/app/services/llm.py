@@ -11,9 +11,10 @@ import base64
 logger = logging.getLogger(__name__)
 
 class LLMService:
-    def __init__(self, provider: str = "gemini", model_name: str = "gemini-2.0-flash"):
+    def __init__(self, provider: str = "gemini", model_name: str = "gemini-2.0-flash", memory_service=None):
         self.provider = provider
         self.model_name = model_name
+        self.memory_service = memory_service
         
         # Setup Gemini using GOOGLE_API_KEY (standard) or GEMINI_API_KEY
         self.gemini_api_key = os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
@@ -27,9 +28,17 @@ class LLMService:
                 self.gemini_model = None
 
     async def analyze(self, context_text: str, user_query: str = "", image: Optional[Image.Image] = None) -> AsyncGenerator[str, None]:
+        memory_context = ""
+        if self.memory_service and user_query:
+            memories = self.memory_service.query_memory(user_query, n_results=3)
+            if memories:
+                memory_context = "\nRelevant Past Context:\n" + "\n".join([f"- {m}" for m in memories])
+
         prompt = f"""
         Context from screen (OCR):
         {context_text[:2000] if context_text else "No text detected via OCR."} 
+        
+        {memory_context}
         
         User Query: {user_query if user_query else "Analyze this screen."}
         
