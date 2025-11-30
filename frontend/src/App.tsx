@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Stoplight } from './components/Stoplight';
 import { Sidebar } from './components/Sidebar';
 import ReactMarkdown from 'react-markdown';
-import { Menu, Send, Camera, Sparkles, FileText, X } from 'lucide-react';
+import { Menu, Send, Camera, Sparkles, FileText, X, Zap, MessageCircleQuestion } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useChatStore } from './store/useChatStore';
 import { useUIStore } from './store/useUIStore';
@@ -24,7 +24,9 @@ const App: React.FC = () => {
     stream, 
     status, 
     createSession, 
-    getCurrentSession 
+    getCurrentSession,
+    autoAnswer,
+    dismissAutoAnswer
   } = useChatStore();
   
   const { isSidebarOpen, toggleSidebar } = useUIStore();
@@ -103,6 +105,49 @@ const App: React.FC = () => {
         </div>
 
         <div className="chat-container">
+            {/* Auto-Answer Card - Shows when question detected */}
+            <AnimatePresence>
+              {autoAnswer && (
+                <motion.div
+                  initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                  transition={{ duration: 0.2, ease: [0.25, 0.1, 0.25, 1] }}
+                  className="auto-answer-card"
+                >
+                  <div className="auto-answer-header">
+                    <div className="auto-answer-badge">
+                      <Zap size={14} />
+                      <span>Question Detected</span>
+                    </div>
+                    <button onClick={dismissAutoAnswer} className="icon-btn auto-dismiss">
+                      <X size={14} />
+                    </button>
+                  </div>
+                  <div className="auto-answer-question">
+                    <MessageCircleQuestion size={16} />
+                    <span>"{autoAnswer.question}"</span>
+                  </div>
+                  <div className="auto-answer-content">
+                    {autoAnswer.content ? (
+                      <ReactMarkdown>{autoAnswer.content}</ReactMarkdown>
+                    ) : (
+                      <div className="auto-answer-loading">
+                        <span className="pulse-dot" />
+                        <span className="pulse-dot" />
+                        <span className="pulse-dot" />
+                      </div>
+                    )}
+                  </div>
+                  {autoAnswer.isStreaming && autoAnswer.content && (
+                    <div className="auto-answer-streaming">
+                      <span className="streaming-indicator" />
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
             <div className="chat-area">
             {messages.length === 0 && !stream ? (
                 <div className="empty-state">

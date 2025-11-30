@@ -17,4 +17,12 @@ export interface Transcript {
   timestamp: number;
 }
 
+export interface AutoAnswer {
+  id: string;
+  question: string;
+  content: string;
+  isStreaming: boolean;
+  timestamp: number;
+}
+
 export type ConnectionStatus = 'connected' | 'disconnected';

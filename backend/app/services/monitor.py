@@ -1,8 +1,9 @@
 import asyncio
 import logging
+import re
 import time
 from collections import deque
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Callable
 from PIL import Image
 from app.services.capture import CaptureService
 from app.services.ocr import OCRService
@@ -10,6 +11,25 @@ from app.services.audio import AudioService
 from app.services.memory import MemoryService
 
 logger = logging.getLogger(__name__)
+
+# Question patterns for detection
+QUESTION_STARTERS = re.compile(
+    r'^(who|what|where|when|why|how|can|could|would|should|is|are|do|does|did|'
+    r'have|has|will|won\'t|isn\'t|aren\'t|don\'t|doesn\'t|didn\'t|haven\'t|hasn\'t|'
+    r'was|were|which|shall|may|might|tell me)\b',
+    re.IGNORECASE
+)
+
+def is_question(text: str) -> bool:
+    """Detect if text is a question directed at the user."""
+    text = text.strip()
+    if not text or len(text) < 10:
+        return False
+    # Explicit question mark
+    if text.endswith('?'):
+        return True
+    # Question starter words
+    return bool(QUESTION_STARTERS.match(text))
 
 class BackgroundMonitor:
     def __init__(
@@ -25,7 +45,8 @@ class BackgroundMonitor:
         self.memory_service = memory_service
         
         self._running = False
-        self._is_recording = True # Controls writing to vector DB
+        self._is_recording = True  # Controls writing to vector DB
+        self._auto_answer_enabled = True  # Controls question detection
         self._tasks = set()
         self.transcript_queue = None
         # Store tuples of (timestamp, text, source)
@@ -34,7 +55,8 @@ class BackgroundMonitor:
         self.latest_text = ""
         self.latest_transcript = ""
         self.latest_image: Optional[Image.Image] = None
-        self.on_transcript = None  # Callback for live broadcasting
+        self.on_transcript: Optional[Callable] = None  # Callback for live broadcasting
+        self.on_question_detected: Optional[Callable] = None  # Callback for auto-answering
 
     async def start(self):
         self._running = True
@@ -89,6 +111,16 @@ class BackgroundMonitor:
         # Store significant transcripts to memory
         if self._is_recording and len(text.split()) >= 4:
             self.memory_service.add_memory(f"{source.upper()}: {text}", "audio")
+        
+        # Detect questions from system audio (other person on call)
+        if self._auto_answer_enabled and source == "system" and is_question(text):
+            logger.info(f"Question detected: {text}")
+            if self.on_question_detected:
+                asyncio.create_task(self.on_question_detected(text))
+    
+    def set_auto_answer(self, enabled: bool):
+        self._auto_answer_enabled = enabled
+        logger.info(f"Auto-answer set to: {enabled}")
     
     def get_recent_transcript(self, seconds: int = 120) -> str:
         """Get transcript from the last N seconds for context when user asks."""

@@ -20,6 +20,24 @@ class StartPayload(WebSocketPayload):
 class DonePayload(WebSocketPayload):
     type: Literal["done"] = "done"
 
+class AutoAnswerPayload(WebSocketPayload):
+    type: Literal["auto_answer"] = "auto_answer"
+    question: str
+    content: str
+
+class AutoAnswerChunkPayload(WebSocketPayload):
+    type: Literal["auto_chunk"] = "auto_chunk"
+    question: str
+    content: str
+
+class AutoAnswerStartPayload(WebSocketPayload):
+    type: Literal["auto_start"] = "auto_start"
+    question: str
+
+class AutoAnswerDonePayload(WebSocketPayload):
+    type: Literal["auto_done"] = "auto_done"
+    question: str
+
 class ChatRequest(WebSocketPayload):
     type: Literal["chat"] = "chat"
     message: str

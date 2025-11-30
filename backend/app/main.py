@@ -4,12 +4,16 @@ from contextlib import asynccontextmanager
 import uvicorn
 import json
 import asyncio
+import time
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
 load_dotenv()
 
-from app.schemas import ChunkPayload, StartPayload, DonePayload, ChatRequest, TranscriptPayload
+from app.schemas import (
+    ChunkPayload, StartPayload, DonePayload, ChatRequest, TranscriptPayload,
+    AutoAnswerStartPayload, AutoAnswerChunkPayload, AutoAnswerDonePayload
+)
 from app.services.monitor import BackgroundMonitor
 from app.services.llm import LLMService
 from app.services.capture import CaptureService
@@ -34,6 +38,8 @@ monitor = BackgroundMonitor(
 )
 
 active_connections: list[WebSocket] = []
+_last_auto_answer_time: float = 0
+_auto_answer_cooldown: float = 10.0  # Seconds between auto-answers
 
 async def broadcast_transcript(text: str, source: str):
     """Sends a live transcript to all connected WebSocket clients."""
@@ -44,9 +50,49 @@ async def broadcast_transcript(text: str, source: str):
     tasks = [connection.send_text(payload) for connection in active_connections]
     await asyncio.gather(*tasks, return_exceptions=True)
 
+async def handle_question_detected(question: str):
+    """Auto-generate answer when a question is detected in conversation."""
+    global _last_auto_answer_time
+    
+    if not active_connections:
+        return
+    
+    # Cooldown to prevent spam
+    now = time.time()
+    if now - _last_auto_answer_time < _auto_answer_cooldown:
+        return
+    _last_auto_answer_time = now
+    
+    # Build context from recent transcript and screen
+    transcript = monitor.get_recent_transcript(seconds=120)
+    screen_text = monitor.latest_text or ""
+    
+    context_parts = []
+    if transcript:
+        context_parts.append(f"RECENT CONVERSATION:\n{transcript}")
+    if screen_text:
+        context_parts.append(f"SCREEN TEXT:\n{screen_text[:2000]}")
+    
+    context = "\n\n".join(context_parts) or "No context available."
+    
+    # Notify all clients that auto-answer is starting
+    start_payload = AutoAnswerStartPayload(question=question).model_dump_json()
+    await asyncio.gather(*[c.send_text(start_payload) for c in active_connections], return_exceptions=True)
+    
+    # Stream the LLM response
+    async for chunk in llm_service.analyze(context, question, monitor.latest_image):
+        if active_connections:
+            chunk_payload = AutoAnswerChunkPayload(question=question, content=chunk).model_dump_json()
+            await asyncio.gather(*[c.send_text(chunk_payload) for c in active_connections], return_exceptions=True)
+    
+    # Notify completion
+    done_payload = AutoAnswerDonePayload(question=question).model_dump_json()
+    await asyncio.gather(*[c.send_text(done_payload) for c in active_connections], return_exceptions=True)
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     monitor.on_transcript = broadcast_transcript
+    monitor.on_question_detected = handle_question_detected
     app.state.monitor = monitor
     await monitor.start()
     yield

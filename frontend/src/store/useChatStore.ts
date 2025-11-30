@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { Session, Message, ConnectionStatus, Transcript } from '../types';
+import { Session, Message, ConnectionStatus, Transcript, AutoAnswer } from '../types';
 
 interface ChatState {
   sessions: Session[];
@@ -8,6 +8,7 @@ interface ChatState {
   stream: string;
   status: ConnectionStatus;
   liveTranscripts: Transcript[];
+  autoAnswer: AutoAnswer | null;
 
   // Actions
   createSession: () => void;
@@ -22,6 +23,10 @@ interface ChatState {
   setStatus: (status: ConnectionStatus) => void;
   addTranscript: (text: string, source: string) => void;
   clearTranscripts: () => void;
+  startAutoAnswer: (question: string) => void;
+  appendAutoAnswer: (content: string) => void;
+  finishAutoAnswer: () => void;
+  dismissAutoAnswer: () => void;
   
   // Computeds
   getCurrentSession: () => Session | undefined;
@@ -35,6 +40,7 @@ export const useChatStore = create<ChatState>()(
       stream: '',
       status: 'disconnected',
       liveTranscripts: [],
+      autoAnswer: null,
 
       getCurrentSession: () => {
         const { sessions, currentSessionId } = get();
@@ -161,6 +167,30 @@ export const useChatStore = create<ChatState>()(
       },
       
       clearTranscripts: () => set({ liveTranscripts: [] }),
+      
+      startAutoAnswer: (question) => set({
+        autoAnswer: {
+          id: Date.now().toString(),
+          question,
+          content: '',
+          isStreaming: true,
+          timestamp: Date.now()
+        }
+      }),
+      
+      appendAutoAnswer: (content) => set((state) => ({
+        autoAnswer: state.autoAnswer 
+          ? { ...state.autoAnswer, content: state.autoAnswer.content + content }
+          : null
+      })),
+      
+      finishAutoAnswer: () => set((state) => ({
+        autoAnswer: state.autoAnswer 
+          ? { ...state.autoAnswer, isStreaming: false }
+          : null
+      })),
+      
+      dismissAutoAnswer: () => set({ autoAnswer: null }),
     }),
     {
       name: 'chat_sessions',
