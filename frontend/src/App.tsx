@@ -1,4 +1,3 @@
-import gsap from 'gsap';
 import {
   Camera,
   FileText,
@@ -19,7 +18,7 @@ import { Stoplight } from './components/Stoplight';
 import { VoiceActivityIndicator } from './components/VoiceActivityIndicator';
 import { useAutoScroll } from './hooks/useAutoScroll';
 import { useChatConnection } from './hooks/useChatConnection';
-import { duration, ease } from './lib/animations';
+import { duration, ease, fadeIn, scaleIn } from './lib/animations';
 import { useChatStore } from './store/useChatStore';
 import { useUIStore } from './store/useUIStore';
 
@@ -28,29 +27,13 @@ const DEFAULT_WIDTH = 400;
 const TRANSCRIPT_WIDTH = 320;
 const DEFAULT_HEIGHT = 600;
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Auto Answer Card - With smooth GSAP animations
-// ═══════════════════════════════════════════════════════════════════════════
-
 interface AutoAnswerCardProps {
   autoAnswer: { question: string; content: string; isStreaming: boolean };
   onDismiss: () => void;
 }
 
-const AutoAnswerCard: React.FC<AutoAnswerCardProps> = ({ autoAnswer, onDismiss }) => {
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (ref.current) {
-      gsap.fromTo(
-        ref.current,
-        { opacity: 0, y: -20, scale: 0.95 },
-        { opacity: 1, y: 0, scale: 1, duration: duration.smooth, ease: ease.bounce }
-      );
-    }
-  }, []);
-
-  return (
+const AutoAnswerCard = React.forwardRef<HTMLDivElement, AutoAnswerCardProps>(
+  ({ autoAnswer, onDismiss }, ref) => (
     <div ref={ref} className="auto-answer-card">
       <div className="auto-answer-header">
         <div className="auto-answer-badge">
@@ -82,32 +65,24 @@ const AutoAnswerCard: React.FC<AutoAnswerCardProps> = ({ autoAnswer, onDismiss }
         </div>
       )}
     </div>
-  );
-};
+  )
+);
+AutoAnswerCard.displayName = 'AutoAnswerCard';
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Message Component - Individual chat message with enter animation
-// ═══════════════════════════════════════════════════════════════════════════
-
-interface MessageProps {
-  content: string;
-  role: 'user' | 'assistant';
-  index: number;
-}
-
-const Message: React.FC<MessageProps> = ({ content, role, index }) => {
+const Message: React.FC<{ content: string; role: 'user' | 'assistant'; index: number }> = ({
+  content,
+  role,
+  index,
+}) => {
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    if (ref.current) {
-      gsap.fromTo(
-        ref.current,
-        { opacity: 0, y: 12 },
-        { opacity: 1, y: 0, duration: duration.normal, ease: ease.butter, delay: index * 0.02 }
-      );
-    }
+    fadeIn(ref.current, {
+      y: 12,
+      delay: index * 0.02,
+      duration: duration.normal,
+      ease: ease.butter,
+    });
   }, [index]);
-
   return (
     <div ref={ref} className={`message ${role}`}>
       <ReactMarkdown>{content}</ReactMarkdown>
@@ -115,23 +90,11 @@ const Message: React.FC<MessageProps> = ({ content, role, index }) => {
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Stream Message - Currently streaming message
-// ═══════════════════════════════════════════════════════════════════════════
-
 const StreamMessage: React.FC<{ content: string }> = ({ content }) => {
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    if (ref.current) {
-      gsap.fromTo(
-        ref.current,
-        { opacity: 0 },
-        { opacity: 1, duration: duration.fast, ease: ease.silk }
-      );
-    }
+    fadeIn(ref.current, { duration: duration.fast, ease: ease.silk });
   }, []);
-
   return (
     <div ref={ref} className="message assistant">
       <ReactMarkdown>{content}</ReactMarkdown>
@@ -139,23 +102,11 @@ const StreamMessage: React.FC<{ content: string }> = ({ content }) => {
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Welcome Hero - Empty state
-// ═══════════════════════════════════════════════════════════════════════════
-
 const WelcomeHero: React.FC = () => {
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
-    if (ref.current) {
-      gsap.fromTo(
-        ref.current,
-        { opacity: 0, y: 16, scale: 0.98 },
-        { opacity: 1, y: 0, scale: 1, duration: duration.smooth, ease: ease.butter }
-      );
-    }
+    scaleIn(ref.current, { from: 0.98, y: 16, duration: duration.smooth, ease: ease.butter });
   }, []);
-
   return (
     <div ref={ref} className="welcome-hero">
       <Sparkles size={48} className="hero-icon" />
@@ -164,10 +115,6 @@ const WelcomeHero: React.FC = () => {
     </div>
   );
 };
-
-// ═══════════════════════════════════════════════════════════════════════════
-// Transcript Panel - Slide-in panel with GSAP
-// ═══════════════════════════════════════════════════════════════════════════
 
 const TranscriptPanel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   (props, ref) => (
@@ -182,40 +129,27 @@ const TranscriptPanel = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HT
 );
 TranscriptPanel.displayName = 'TranscriptPanel';
 
-// ═══════════════════════════════════════════════════════════════════════════
-// Main App Component
-// ═══════════════════════════════════════════════════════════════════════════
-
 const App: React.FC = () => {
   const [input, setInput] = useState('');
   const [showTranscript, setShowTranscript] = useState(false);
-
   const { stream, status, createSession, getCurrentSession, autoAnswer, dismissAutoAnswer } =
     useChatStore();
-
   const { isSidebarOpen, toggleSidebar } = useUIStore();
   const { sendMessage } = useChatConnection();
-
-  const currentSession = getCurrentSession();
-  const messages = currentSession?.messages ?? [];
+  const messages = getCurrentSession()?.messages ?? [];
   const { containerRef } = useAutoScroll([messages, stream]);
 
-  // Always start with a fresh conversation
   useEffect(() => {
     createSession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally run only on mount
-  }, []);
-
-  // Electron listeners
+  }, [createSession]);
   useEffect(() => {
-    const cleanup = window.electron?.window.onShown(() => console.log('Window shown'));
-    return () => cleanup?.();
+    return window.electron?.window.onShown(() => console.log('Window shown'));
   }, []);
-
-  // Handle Window Resizing
   useEffect(() => {
-    const targetWidth = showTranscript ? DEFAULT_WIDTH + TRANSCRIPT_WIDTH : DEFAULT_WIDTH;
-    window.electron?.window.resize(targetWidth, DEFAULT_HEIGHT);
+    window.electron?.window.resize(
+      showTranscript ? DEFAULT_WIDTH + TRANSCRIPT_WIDTH : DEFAULT_WIDTH,
+      DEFAULT_HEIGHT
+    );
   }, [showTranscript]);
 
   const handleSend = () => {
@@ -227,7 +161,6 @@ const App: React.FC = () => {
   return (
     <div className="app-container">
       <Sidebar />
-
       <div className={`main-content ${isSidebarOpen ? 'pushed' : ''}`}>
         <div className="header draggable">
           <div className="header-left">
@@ -260,7 +193,6 @@ const App: React.FC = () => {
         </div>
 
         <div className="chat-container">
-          {/* Auto-Answer Card - Shows when question detected */}
           <Presence animation="scaleUp">
             {autoAnswer && (
               <AutoAnswerCard
