@@ -1,5 +1,9 @@
 """gRPC server exposing inference services to the Go platform."""
 
+import warnings
+# Suppress torchcodec warning - we use in-memory audio which bypasses torchcodec
+warnings.filterwarnings("ignore", message="torchcodec is not installed correctly")
+
 import asyncio
 import io
 import os

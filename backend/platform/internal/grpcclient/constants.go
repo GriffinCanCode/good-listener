@@ -12,4 +12,8 @@ const (
 	// Health check configuration
 	DefaultHealthCheckInterval = 5 * time.Second
 	HealthCheckTimeout         = 2 * time.Second
+
+	// Startup configuration
+	DefaultStartupTimeout = 60 * time.Second
+	StartupPollInterval   = 500 * time.Millisecond
 )

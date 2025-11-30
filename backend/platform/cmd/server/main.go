@@ -31,6 +31,14 @@ func main() {
 	}
 	defer func() { _ = inference.Close() }()
 
+	// Wait for inference server to be ready before starting orchestrator
+	startupCtx, startupCancel := context.WithCancel(context.Background())
+	defer startupCancel()
+	if err := inference.WaitReady(startupCtx, grpcclient.DefaultStartupTimeout); err != nil {
+		slog.Error("inference server not ready", "error", err)
+		os.Exit(1)
+	}
+
 	// Create orchestrator
 	orch := orchestrator.New(inference, cfg)
 
