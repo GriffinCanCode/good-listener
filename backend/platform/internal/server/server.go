@@ -29,9 +29,10 @@ type ChatMessage struct {
 }
 
 type TranscriptMessage struct {
-	Type   string `json:"type"`
-	Text   string `json:"text"`
-	Source string `json:"source"`
+	Type    string `json:"type"`
+	Text    string `json:"text"`
+	Source  string `json:"source"`
+	Speaker string `json:"speaker"`
 }
 
 type ChunkMessage struct {

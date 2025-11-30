@@ -5,45 +5,42 @@
   --glass-bg: rgba(255, 255, 255, 0.03);
   --glass-bg-strong: rgba(255, 255, 255, 0.08);
   --glass-bg-subtle: rgba(255, 255, 255, 0.02);
-  
+
   /* Refractive Borders */
   --glass-border: rgba(255, 255, 255, 0.2);
   --glass-border-light: rgba(255, 255, 255, 0.5);
   --glass-border-dark: rgba(0, 0, 0, 0.1);
-  
+
   /* Accent Colors */
   --accent-primary: #bfa5ff;
   --accent-secondary: #60c9ff;
   --accent-gradient: linear-gradient(135deg, #bfa5ff 0%, #60c9ff 100%);
   --accent-glow: rgba(191, 165, 255, 0.3);
   --accent-user: rgba(191, 165, 255, 0.15);
-  
+
   /* Text Colors */
   --text-primary: rgba(255, 255, 255, 0.98);
   --text-secondary: rgba(255, 255, 255, 0.7);
   --text-muted: rgba(255, 255, 255, 0.45);
-  
+
   /* Status Colors */
   --success: #4ade80;
   --success-glow: rgba(74, 222, 128, 0.5);
   --danger: #f87171;
   --danger-glow: rgba(248, 113, 113, 0.5);
   --warning: #fbbf24;
-  
+
   /* Effects - Optimized blur values */
   --blur-amount: 16px;
   --blur-strong: 24px;
-  --shadow-glass: 
-    0 4px 30px rgba(0, 0, 0, 0.1),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.1),
+  --shadow-glass:
+    0 4px 30px rgba(0, 0, 0, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.1),
     inset 0 0 20px rgba(255, 255, 255, 0.05);
-  --shadow-elevated: 
-    0 20px 40px rgba(0, 0, 0, 0.4),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.15);
-    
+  --shadow-elevated: 0 20px 40px rgba(0, 0, 0, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.15);
+
   /* Typography */
   --font-main: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
-  
+
   /* Spacing */
   --radius-sm: 10px;
   --radius-md: 16px;
@@ -55,7 +52,8 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   margin: 0;
   padding: 0;
   height: 100%;
@@ -81,13 +79,15 @@ body {
   position: relative;
   overflow: hidden;
   border-radius: var(--radius-lg);
-  background: 
+  background:
     radial-gradient(circle at 0% 0%, rgba(99, 46, 204, 0.4) 0%, transparent 50%),
     radial-gradient(circle at 100% 100%, rgba(6, 182, 212, 0.3) 0%, transparent 50%),
     radial-gradient(circle at 50% 50%, rgba(236, 72, 153, 0.2) 0%, transparent 70%),
     linear-gradient(180deg, #020205 0%, #0f0c1d 50%, #080b14 100%);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 0 0 1px rgba(0,0,0,1), 0 20px 60px rgba(0,0,0,0.6);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 1),
+    0 20px 60px rgba(0, 0, 0, 0.6);
 }
 
 .app-container::before {
@@ -168,7 +168,7 @@ body {
 .new-chat-btn {
   margin: 16px;
   padding: 12px 16px;
-  background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%);
   color: white;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-top-color: rgba(255, 255, 255, 0.4);
@@ -181,8 +181,11 @@ body {
   font-weight: 500;
   font-size: 14px;
   cursor: pointer;
-  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out, border-color 0.15s ease-out;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+  transition:
+    transform 0.15s ease-out,
+    box-shadow 0.15s ease-out,
+    border-color 0.15s ease-out;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
   transform: translateZ(0);
 }
 
@@ -209,7 +212,10 @@ body {
   color: var(--text-secondary);
   background: transparent;
   border: 1px solid transparent;
-  transition: background 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+  transition:
+    background 0.1s ease,
+    color 0.1s ease,
+    border-color 0.1s ease;
 }
 
 .session-item:hover {
@@ -247,7 +253,10 @@ body {
   padding: 6px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: opacity 0.1s ease, background 0.1s ease, color 0.1s ease;
+  transition:
+    opacity 0.1s ease,
+    background 0.1s ease,
+    color 0.1s ease;
 }
 
 .session-item:hover .delete-btn {
@@ -287,7 +296,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: linear-gradient(180deg, rgba(30,30,40,0.8) 0%, rgba(20,20,30,0.6) 100%);
+  background: linear-gradient(180deg, rgba(30, 30, 40, 0.8) 0%, rgba(20, 20, 30, 0.6) 100%);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   user-select: none;
   flex-shrink: 0;
@@ -316,7 +325,7 @@ body {
   font-weight: 500;
   font-size: 13px;
   letter-spacing: 0.2px;
-  text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
 }
 
@@ -325,7 +334,9 @@ body {
   height: 8px;
   border-radius: 50%;
   background: var(--text-muted);
-  transition: background 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease;
   position: relative;
 }
 
@@ -354,7 +365,10 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.1s ease, color 0.1s ease, border-color 0.1s ease;
+  transition:
+    background 0.1s ease,
+    color 0.1s ease,
+    border-color 0.1s ease;
 }
 
 .icon-btn:hover {
@@ -414,7 +428,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-top: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--radius-xl);
-  box-shadow: 
+  box-shadow:
     0 20px 50px -10px rgba(0, 0, 0, 0.5),
     inset 0 0 0 1px rgba(255, 255, 255, 0.05);
   position: relative;
@@ -486,8 +500,12 @@ body {
 }
 
 /* Markdown Content */
-.message p { margin: 0; }
-.message p + p { margin-top: 10px; }
+.message p {
+  margin: 0;
+}
+.message p + p {
+  margin-top: 10px;
+}
 .message code {
   background: rgba(0, 0, 0, 0.3);
   padding: 2px 6px;
@@ -505,7 +523,7 @@ body {
   overflow-x: auto;
   margin: 10px 0;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: inset 0 2px 10px rgba(0,0,0,0.3);
+  box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.3);
 }
 .message pre code {
   background: transparent;
@@ -514,7 +532,8 @@ body {
   color: inherit;
   font-size: 11px;
 }
-.message ol, .message ul {
+.message ol,
+.message ul {
   margin: 8px 0;
   padding-left: 20px;
 }
@@ -525,7 +544,7 @@ body {
 /* --- Input Area --- */
 .input-area {
   padding: 12px 16px 16px;
-  background: linear-gradient(180deg, transparent 0%, rgba(0,0,0,0.2) 100%);
+  background: linear-gradient(180deg, transparent 0%, rgba(0, 0, 0, 0.2) 100%);
   position: relative;
   flex-shrink: 0;
   flex-grow: 0;
@@ -538,7 +557,7 @@ body {
   left: 20px;
   right: 20px;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
 }
 
 .input-wrapper {
@@ -552,8 +571,10 @@ body {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-  box-shadow: 
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  box-shadow:
     0 10px 30px -5px rgba(0, 0, 0, 0.3),
     inset 0 2px 10px rgba(0, 0, 0, 0.2);
   transform: translateZ(0);
@@ -561,7 +582,7 @@ body {
 
 .input-wrapper:focus-within {
   border-color: rgba(167, 139, 250, 0.5);
-  box-shadow: 
+  box-shadow:
     0 10px 40px -5px rgba(0, 0, 0, 0.4),
     0 0 0 1px rgba(167, 139, 250, 0.3),
     inset 0 2px 10px rgba(0, 0, 0, 0.1);
@@ -598,7 +619,9 @@ textarea::placeholder {
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
+  transition:
+    transform 0.15s ease-out,
+    box-shadow 0.15s ease-out;
   box-shadow: 0 4px 20px var(--accent-glow);
   border: 1px solid rgba(255, 255, 255, 0.3);
   transform: translateZ(0);
@@ -652,7 +675,7 @@ textarea::placeholder {
   cursor: pointer;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
   transform: translateZ(0);
 }
 
@@ -663,13 +686,22 @@ textarea::placeholder {
   left: 0;
   right: 0;
   bottom: 0;
-  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.8) 0%, transparent 60%);
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.8) 0%, transparent 60%);
   opacity: 0.4;
 }
 
-.close { background: #FF5F57; box-shadow: 0 0 10px rgba(255, 95, 87, 0.4); }
-.minimize { background: #FFBD2E; box-shadow: 0 0 10px rgba(255, 189, 46, 0.4); }
-.maximize { background: #28C840; box-shadow: 0 0 10px rgba(40, 200, 64, 0.4); }
+.close {
+  background: #ff5f57;
+  box-shadow: 0 0 10px rgba(255, 95, 87, 0.4);
+}
+.minimize {
+  background: #ffbd2e;
+  box-shadow: 0 0 10px rgba(255, 189, 46, 0.4);
+}
+.maximize {
+  background: #28c840;
+  box-shadow: 0 0 10px rgba(40, 200, 64, 0.4);
+}
 
 /* --- Live Transcript Panel (GPU-optimized) --- */
 .live-transcript-wrapper {
@@ -737,8 +769,20 @@ textarea::placeholder {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  mask-image: linear-gradient(to bottom, transparent 0%, black 10px, black calc(100% - 10px), transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10px, black calc(100% - 10px), transparent 100%);
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 10px,
+    black calc(100% - 10px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 10px,
+    black calc(100% - 10px),
+    transparent 100%
+  );
 }
 
 .transcript-item {
@@ -759,30 +803,62 @@ textarea::placeholder {
 
 .transcript-item.user {
   border-left: 3px solid var(--accent-primary);
-  background: linear-gradient(90deg, rgba(167, 139, 250, 0.05) 0%, rgba(255,255,255,0.02) 100%);
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
 }
 
 .transcript-item.system {
-  border-left: 3px solid var(--accent-secondary);
+  border-left: 3px solid #4ade80;
+  background: linear-gradient(90deg, rgba(74, 222, 128, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
 }
 
 .transcript-source {
-  display: block;
-  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
   color: var(--text-muted);
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   text-transform: uppercase;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 0.8px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.2);
 }
 
 .transcript-item.user .transcript-source {
   color: var(--accent-primary);
+  background: rgba(167, 139, 250, 0.15);
   text-shadow: 0 0 10px var(--accent-glow);
 }
 
 .transcript-item.system .transcript-source {
-  color: var(--accent-secondary);
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.12);
+  text-shadow: 0 0 10px rgba(74, 222, 128, 0.4);
+}
+
+.transcript-icon {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.transcript-item.user .transcript-icon {
+  background: rgba(167, 139, 250, 0.2);
+  color: var(--accent-primary);
+}
+
+.transcript-item.system .transcript-icon {
+  background: rgba(74, 222, 128, 0.15);
+  color: #4ade80;
 }
 
 .transcript-content p {
@@ -794,8 +870,15 @@ textarea::placeholder {
 
 /* --- Floating Orbs Background Effect (GPU-optimized) --- */
 @keyframes float {
-  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
-  50% { transform: translate3d(25px, -30px, 0) scale(1.05); opacity: 0.85; }
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: translate3d(25px, -30px, 0) scale(1.05);
+    opacity: 0.85;
+  }
 }
 
 .app-container::after {
@@ -805,7 +888,12 @@ textarea::placeholder {
   left: 60%;
   width: 500px;
   height: 500px;
-  background: radial-gradient(circle, rgba(167, 139, 250, 0.15) 0%, rgba(56, 189, 248, 0.1) 30%, transparent 70%);
+  background: radial-gradient(
+    circle,
+    rgba(167, 139, 250, 0.15) 0%,
+    rgba(56, 189, 248, 0.1) 30%,
+    transparent 70%
+  );
   transform: translate(-50%, -50%);
   pointer-events: none;
   animation: float 20s ease-in-out infinite;
@@ -828,7 +916,7 @@ textarea::placeholder {
   border-top: 1px solid rgba(255, 220, 140, 0.5);
   border-radius: var(--radius-lg);
   padding: 16px;
-  box-shadow: 
+  box-shadow:
     0 20px 60px rgba(0, 0, 0, 0.5),
     0 0 40px rgba(255, 180, 50, 0.15),
     inset 0 0 30px rgba(255, 200, 100, 0.05);
@@ -959,7 +1047,9 @@ textarea::placeholder {
 }
 
 @keyframes pulse {
-  0%, 80%, 100% {
+  0%,
+  80%,
+  100% {
     transform: scale(0.6);
     opacity: 0.4;
   }
@@ -987,7 +1077,11 @@ textarea::placeholder {
 }
 
 @keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
 }
-

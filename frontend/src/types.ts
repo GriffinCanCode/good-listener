@@ -14,6 +14,7 @@ export interface Transcript {
   id: string;
   text: string;
   source: 'user' | 'system';
+  speaker: string;
   timestamp: number;
 }
 

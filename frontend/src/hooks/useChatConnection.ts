@@ -27,6 +27,7 @@ interface WsMessageTranscript {
   type: 'transcript';
   text: string;
   source: string;
+  speaker: string;
 }
 interface WsMessageAutoStart {
   type: 'auto_start';
@@ -111,7 +112,7 @@ export const useChatConnection = () => {
             addMessageToCurrent({ role: 'assistant', content: data.content });
             break;
           case 'transcript':
-            addTranscript(data.text, data.source);
+            addTranscript(data.text, data.source, data.speaker);
             break;
           case 'auto_start':
             startAutoAnswer(data.question);

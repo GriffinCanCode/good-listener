@@ -21,7 +21,7 @@ interface ChatState {
   commitStreamToMessage: () => void;
   clearStream: () => void;
   setStatus: (status: ConnectionStatus) => void;
-  addTranscript: (text: string, source: string) => void;
+  addTranscript: (text: string, source: string, speaker: string) => void;
   clearTranscripts: () => void;
   startAutoAnswer: (question: string) => void;
   appendAutoAnswer: (content: string) => void;
@@ -135,7 +135,7 @@ export const useChatStore = create<ChatState>()(
       clearStream: () => set({ stream: '' }),
       setStatus: (status) => set({ status }),
 
-      addTranscript: (text, source) => {
+      addTranscript: (text, source, speaker) => {
         set((state) => {
           // Deduplication logic
           const now = Date.now();
@@ -157,6 +157,7 @@ export const useChatStore = create<ChatState>()(
                 id: `${now}-${Math.random().toString(36).slice(2)}`,
                 text,
                 source: source as 'user' | 'system',
+                speaker: speaker || (source === 'user' ? 'You' : 'Speaker'),
                 timestamp: now,
               },
             ].slice(-50),

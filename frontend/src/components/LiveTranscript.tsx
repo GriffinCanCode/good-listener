@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Mic, Monitor } from 'lucide-react';
+import { Mic, User } from 'lucide-react';
 import React, { useEffect, useRef } from 'react';
 import { useChatStore } from '../store/useChatStore';
 
@@ -35,10 +35,10 @@ export const LiveTranscript: React.FC = () => {
               className={`transcript-item ${t.source}`}
             >
               <div className="transcript-icon">
-                {t.source === 'user' ? <Mic size={14} /> : <Monitor size={14} />}
+                {t.source === 'user' ? <Mic size={14} /> : <User size={14} />}
               </div>
               <div className="transcript-content">
-                <span className="transcript-source">{t.source === 'user' ? 'You' : 'System'}</span>
+                <span className="transcript-source">{t.speaker}</span>
                 <p>{t.text}</p>
               </div>
             </motion.div>

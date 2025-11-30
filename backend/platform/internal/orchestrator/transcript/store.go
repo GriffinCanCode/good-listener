@@ -9,8 +9,9 @@ import (
 
 // Event represents a transcription event.
 type Event struct {
-	Text   string
-	Source string
+	Text    string
+	Source  string
+	Speaker string
 }
 
 // Entry represents a stored transcript.
@@ -18,6 +19,7 @@ type Entry struct {
 	Timestamp time.Time
 	Text      string
 	Source    string
+	Speaker   string
 }
 
 // Summary represents a compressed transcript segment.
@@ -29,7 +31,7 @@ type Summary struct {
 
 // Store interface for transcript operations.
 type Store interface {
-	Add(text, source string)
+	Add(text, source, speaker string)
 	GetRecent(seconds int) string
 	GetUnsummarized(olderThan time.Duration) ([]Entry, time.Time, time.Time)
 	StoreSummary(start, end time.Time, text string)
@@ -57,7 +59,7 @@ func NewStore(maxEntries, eventBuffer int) *MemoryStore {
 }
 
 // Add stores a new transcript entry.
-func (s *MemoryStore) Add(text, source string) {
+func (s *MemoryStore) Add(text, source, speaker string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -65,6 +67,7 @@ func (s *MemoryStore) Add(text, source string) {
 		Timestamp: time.Now(),
 		Text:      text,
 		Source:    source,
+		Speaker:   speaker,
 	})
 
 	if len(s.entries) > s.maxSize {

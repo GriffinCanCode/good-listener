@@ -123,10 +123,16 @@ func (m *Manager) handleSpeech(ctx context.Context, samples []float32, source st
 		return
 	}
 
-	log.Info("transcribed", "source", source, "text", text)
+	// Derive speaker label from source
+	speaker := "Speaker"
+	if source == "user" {
+		speaker = "You"
+	}
 
-	m.transcripts.Add(text, source)
-	m.transcripts.Emit(TranscriptEvent{Text: text, Source: source})
+	log.Info("transcribed", "source", source, "speaker", speaker, "text", text)
+
+	m.transcripts.Add(text, source, speaker)
+	m.transcripts.Emit(TranscriptEvent{Text: text, Source: source, Speaker: speaker})
 
 	// Store to vector DB if recording (batched for efficiency)
 	m.mu.RLock()
