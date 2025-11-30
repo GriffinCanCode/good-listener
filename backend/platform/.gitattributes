@@ -1,0 +1,44 @@
+# Git attributes for Go project
+# Auto-detect text files and normalize line endings
+* text=auto eol=lf
+
+# Go
+*.go text diff=golang
+go.mod text
+go.sum text
+
+# Shell scripts
+*.sh text eol=lf
+
+# Windows batch files
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Documentation
+*.md text diff=markdown
+*.txt text
+LICENSE text
+
+# Configuration
+*.json text
+*.yaml text
+*.yml text
+*.toml text
+*.xml text
+
+# Binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+
+# Generated files - keep as-is
+*.pb.go linguist-generated=true
+*_grpc.pb.go linguist-generated=true
+

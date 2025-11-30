@@ -1,4 +1,9 @@
-.PHONY: proto proto-python proto-go inference inference-venv inference-test platform platform-deps platform-build platform-dev platform-test e2e-test proto-test clean
+.PHONY: proto proto-python proto-go \
+        inference inference-venv inference-test \
+        platform platform-deps platform-build platform-dev platform-test platform-lint platform-fmt platform-coverage platform-tools platform-tidy \
+        e2e-test proto-test \
+        test test-all install clean help \
+        lint fmt tools start
 
 # ============================================================================
 # Proto Generation
@@ -42,20 +47,67 @@ inference-test:
 # Platform (Go Orchestration)
 # ============================================================================
 
-platform-deps:
+# Install Go tooling
+platform-tools:
+	@echo "Installing Go tools..."
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+	@go install golang.org/x/tools/cmd/goimports@latest
+	@go install github.com/evilmartians/lefthook@latest
+	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	@go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	@cd platform && lefthook install || true
+	@echo "Go tools installed"
+
+platform-deps: platform-tidy
+
+platform-tidy:
 	@cd platform && go mod tidy
 
 platform-build:
-	@cd platform && go build -o bin/server ./cmd/server
+	@cd platform && CGO_ENABLED=1 go build -o server ./cmd/server
 
 platform: platform-deps platform-build
-	@cd platform && ./bin/server
+	@cd platform && ./server
 
 platform-dev:
 	@cd platform && go run ./cmd/server
 
+# Testing
 platform-test:
-	@cd platform && go test ./...
+	@cd platform && go test -race -shuffle=on ./...
+
+platform-test-v:
+	@cd platform && go test -race -shuffle=on -v ./...
+
+platform-coverage:
+	@cd platform && go test -race -coverprofile=coverage.out -covermode=atomic ./...
+	@cd platform && go tool cover -func=coverage.out
+	@cd platform && go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report: platform/coverage.html"
+
+platform-bench:
+	@cd platform && go test -bench=. -benchmem ./...
+
+# Linting & Formatting
+platform-lint:
+	@cd platform && golangci-lint run
+
+platform-lint-fix:
+	@cd platform && golangci-lint run --fix
+
+platform-fmt:
+	@cd platform && gofmt -s -w .
+	@cd platform && goimports -local github.com/good-listener -w .
+
+platform-vet:
+	@cd platform && go vet ./...
+
+# Security & Quality
+platform-vuln:
+	@cd platform && go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+platform-mod-verify:
+	@cd platform && go mod verify
 
 # ============================================================================
 # End-to-End Tests
@@ -73,17 +125,65 @@ proto-test:
 # Combined
 # ============================================================================
 
+start:
+	@echo "Starting backend (inference + platform)..."
+	@$(MAKE) -j2 inference platform
+
 test: inference-test platform-test
 
 test-all: inference-test platform-test proto-test e2e-test
 	@echo "All tests passed!"
 
-install: inference-install platform-deps
+lint: platform-lint
+fmt: platform-fmt
+tools: platform-tools
+
+install: inference-install platform-deps platform-tools
 	@cd tests && go mod tidy
 
 clean:
 	@rm -rf inference/venv inference/__pycache__ inference/**/__pycache__
 	@rm -rf inference/app/pb/*.py inference/app/pb/__pycache__
-	@rm -rf platform/bin
+	@rm -rf platform/server platform/coverage.out platform/coverage.html
 	@echo "Backend cleaned"
 
+# ============================================================================
+# Help
+# ============================================================================
+
+help:
+	@echo "Backend Makefile Commands"
+	@echo ""
+	@echo "Proto:"
+	@echo "  proto              - Generate all protobuf files"
+	@echo "  proto-python       - Generate Python protobuf files"
+	@echo "  proto-go           - Generate Go protobuf files"
+	@echo ""
+	@echo "Inference (Python):"
+	@echo "  inference          - Run Python inference server"
+	@echo "  inference-install  - Install Python dependencies"
+	@echo "  inference-test     - Run Python tests"
+	@echo ""
+	@echo "Platform (Go):"
+	@echo "  platform           - Build and run Go server"
+	@echo "  platform-dev       - Run Go server in dev mode"
+	@echo "  platform-build     - Build Go binary"
+	@echo "  platform-test      - Run Go tests"
+	@echo "  platform-coverage  - Generate coverage report"
+	@echo "  platform-bench     - Run benchmarks"
+	@echo "  platform-lint      - Run golangci-lint"
+	@echo "  platform-lint-fix  - Auto-fix lint issues"
+	@echo "  platform-fmt       - Format Go code"
+	@echo "  platform-vet       - Run go vet"
+	@echo "  platform-vuln      - Check for vulnerabilities"
+	@echo "  platform-tools     - Install Go dev tools"
+	@echo ""
+	@echo "Combined:"
+	@echo "  start              - Start backend (inference + platform)"
+	@echo "  test               - Run unit tests"
+	@echo "  test-all           - Run all tests"
+	@echo "  lint               - Run all linters"
+	@echo "  fmt                - Format all code"
+	@echo "  tools              - Install all dev tools"
+	@echo "  install            - Install all dependencies"
+	@echo "  clean              - Clean build artifacts"

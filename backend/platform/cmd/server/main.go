@@ -29,7 +29,7 @@ func main() {
 		slog.Error("failed to connect to inference server", "addr", cfg.InferenceAddr, "error", err)
 		os.Exit(1)
 	}
-	defer inference.Close()
+	defer func() { _ = inference.Close() }()
 
 	// Create orchestrator
 	orch := orchestrator.New(inference, cfg)

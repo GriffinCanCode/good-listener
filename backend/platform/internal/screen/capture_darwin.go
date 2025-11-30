@@ -4,17 +4,21 @@ package screen
 
 import (
 	"bytes"
+	"context"
 	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"time"
 )
 
 type darwinBackend struct{ tempDir string }
 
 func (d *darwinBackend) captureRaw() []byte {
 	tmpFile := filepath.Join(d.tempDir, "screenshot.jpg")
-	cmd := exec.Command("screencapture", "-x", "-t", "jpg", "-m", tmpFile)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "screencapture", "-x", "-t", "jpg", "-m", tmpFile)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
@@ -26,13 +30,13 @@ func (d *darwinBackend) captureRaw() []byte {
 		slog.Error("failed to read screenshot", "error", err)
 		return nil
 	}
-	os.Remove(tmpFile)
+	_ = os.Remove(tmpFile)
 	return data
 }
 
 func (d *darwinBackend) cleanup() {}
 
-// New creates a platform-specific screen capturer
+// New creates a platform-specific screen capturer.
 func New() Capturer {
 	tmpDir, err := os.MkdirTemp("", "goodlistener-screen-*")
 	if err != nil {

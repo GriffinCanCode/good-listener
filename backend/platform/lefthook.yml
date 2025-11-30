@@ -1,0 +1,62 @@
+# Lefthook configuration for Go project
+# Install: go install github.com/evilmartians/lefthook@latest && lefthook install
+# https://github.com/evilmartians/lefthook
+
+assert_lefthook_installed: true
+no_tty: false
+colors: true
+
+pre-commit:
+  parallel: true
+  commands:
+    gofmt:
+      glob: "*.go"
+      exclude: "*.pb.go"
+      run: gofmt -l -s -w {staged_files}
+      stage_fixed: true
+
+    goimports:
+      glob: "*.go"
+      exclude: "*.pb.go"
+      run: goimports -local github.com/good-listener -w {staged_files}
+      stage_fixed: true
+
+    golangci-lint:
+      glob: "*.go"
+      exclude: "*.pb.go"
+      run: golangci-lint run --fix --new-from-rev=HEAD~1
+      stage_fixed: true
+
+    go-mod-tidy:
+      glob: "{go.mod,go.sum}"
+      run: go mod tidy && git diff --exit-code go.mod go.sum
+
+pre-push:
+  parallel: true
+  commands:
+    test:
+      run: go test -race -short ./...
+
+    lint:
+      run: golangci-lint run
+
+commit-msg:
+  commands:
+    conventional-commits:
+      # Enforce conventional commit format
+      run: |
+        msg=$(cat {1})
+        pattern="^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?: .{1,72}"
+        if ! echo "$msg" | grep -qE "$pattern"; then
+          echo "❌ Commit message must follow Conventional Commits format:"
+          echo "   <type>(<scope>): <subject>"
+          echo ""
+          echo "   Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+          echo ""
+          echo "   Example: feat(audio): add noise cancellation"
+          exit 1
+        fi
+
+# Skip hooks in CI
+skip_in_ci: true
+

@@ -31,7 +31,8 @@ type Capturer struct {
 }
 
 type deviceCapture struct {
-	device *malgo.Device
+	device   *malgo.Device
+	stopOnce sync.Once
 }
 
 // NewCapturer creates a new audio capturer.

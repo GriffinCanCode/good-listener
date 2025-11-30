@@ -1,0 +1,41 @@
+# EditorConfig for Go backend
+# https://editorconfig.org
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.go]
+indent_style = tab
+indent_size = 4
+
+[*.{yaml,yml}]
+indent_style = space
+indent_size = 2
+
+[*.{json,toml}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.proto]
+indent_style = space
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+
+[go.mod]
+indent_style = tab
+indent_size = 4
+
+[go.sum]
+indent_style = tab
+indent_size = 4
+

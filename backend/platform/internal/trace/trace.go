@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-// Metadata keys for gRPC/HTTP propagation (W3C-style)
+// Metadata keys for gRPC/HTTP propagation (W3C-style).
 const (
 	TraceIDKey      = "x-trace-id"
 	SpanIDKey       = "x-span-id"
@@ -68,14 +68,14 @@ func EnsureContext(ctx context.Context) (context.Context, Context) {
 // generateTraceID creates a 128-bit trace ID (W3C standard).
 func generateTraceID() string {
 	b := make([]byte, 16)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
 
 // generateSpanID creates a 64-bit span ID (W3C standard).
 func generateSpanID() string {
 	b := make([]byte, 8)
-	rand.Read(b)
+	_, _ = rand.Read(b)
 	return hex.EncodeToString(b)
 }
 
