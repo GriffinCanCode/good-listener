@@ -1,0 +1,11 @@
+# Root
+.DS_Store
+.vscode/
+.idea/
+
+# Sub-projects (redundant but safe)
+backend/venv/
+backend/__pycache__/
+frontend/node_modules/
+frontend/dist/
+frontend/build/
