@@ -11,7 +11,7 @@ class TestMemoryService:
         """MemoryService initializes ChromaDB client."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test_chroma")
@@ -23,7 +23,7 @@ class TestMemoryService:
         """MemoryService handles init failure gracefully."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient", side_effect=Exception("Failed")):
+        with patch("app.services.memory.service.chromadb.PersistentClient", side_effect=Exception("Failed")):
             with patch("os.path.exists", return_value=True):
                 service = MemoryService()
 
@@ -34,7 +34,7 @@ class TestMemoryService:
         """add_memory stores text in collection."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -49,7 +49,7 @@ class TestMemoryService:
         """add_memory skips empty text."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -61,7 +61,7 @@ class TestMemoryService:
         """add_memory handles missing collection."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient", side_effect=Exception("Failed")):
+        with patch("app.services.memory.service.chromadb.PersistentClient", side_effect=Exception("Failed")):
             with patch("os.path.exists", return_value=True):
                 service = MemoryService()
                 # Should not raise
@@ -71,7 +71,7 @@ class TestMemoryService:
         """add_memory includes custom metadata."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -98,7 +98,7 @@ class TestMemoryService:
         # Mock uniqueness query
         mock_chromadb.query.return_value = {"ids": [[]], "distances": [[]]}
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -110,7 +110,7 @@ class TestMemoryService:
         """query_memory returns matching documents."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -123,7 +123,7 @@ class TestMemoryService:
         """query_memory passes metadata filter."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -136,7 +136,7 @@ class TestMemoryService:
         """query_memory returns empty list when no collection."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient", side_effect=Exception("Failed")):
+        with patch("app.services.memory.service.chromadb.PersistentClient", side_effect=Exception("Failed")):
             with patch("os.path.exists", return_value=True):
                 service = MemoryService()
                 results = service.query_memory("test")
@@ -149,7 +149,7 @@ class TestMemoryService:
 
         mock_chromadb.query.return_value = {"documents": [[]]}
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -163,7 +163,7 @@ class TestMemoryService:
 
         mock_chromadb.query.side_effect = Exception("Query failed")
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -182,7 +182,7 @@ class TestMemoryService:
         # Mock uniqueness query (uniform uniqueness for simplicity)
         mock_chromadb.query.return_value = {"ids": [[]], "distances": [[]]}
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -207,7 +207,7 @@ class TestMemoryService:
         # Mock uniqueness query
         mock_chromadb.query.return_value = {"ids": [["old_high_access"]], "distances": [[0.0, 0.3]]}
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -232,7 +232,7 @@ class TestMemoryService:
         mock_chromadb.get.return_value = {"ids": ids, "metadatas": metadatas}
         mock_chromadb.query.return_value = {"ids": [[]], "distances": [[]]}
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -247,8 +247,8 @@ class TestMemoryService:
         """_ensure_data_dir creates directory if missing."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.Path") as mock_path:
-            with patch("app.services.memory.chromadb.PersistentClient"):
+        with patch("app.services.memory.service.Path") as mock_path:
+            with patch("app.services.memory.service.chromadb.PersistentClient"):
                 MemoryService(persistence_path="/tmp/new_dir")
                 mock_path.return_value.mkdir.assert_called_with(parents=True, exist_ok=True)
 
@@ -260,7 +260,7 @@ class TestMemoryServiceEdgeCases:
         """add_memory skips whitespace-only text."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -274,7 +274,7 @@ class TestMemoryServiceEdgeCases:
 
         mock_chromadb.add.side_effect = Exception("Add failed")
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -285,7 +285,7 @@ class TestMemoryServiceEdgeCases:
         """query_memory handles special characters in query."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -297,7 +297,7 @@ class TestMemoryServiceEdgeCases:
         """query_memory handles large n_results."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -310,7 +310,7 @@ class TestMemoryServiceEdgeCases:
         """add_memory preserves custom timestamp in metadata."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -326,7 +326,7 @@ class TestMemoryServiceEdgeCases:
 
         mock_chromadb.get.return_value = {"ids": [], "metadatas": [], "documents": []}
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -344,7 +344,7 @@ class TestMemoryServiceEdgeCases:
             "documents": [],
         }
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -358,7 +358,7 @@ class TestMemoryServiceEdgeCases:
 
         mock_chromadb.get.side_effect = Exception("Get failed")
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -375,7 +375,7 @@ class TestMemoryServiceConcurrency:
 
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -394,7 +394,7 @@ class TestMemoryServiceConcurrency:
         """query_memory handles None filter_metadata."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -411,7 +411,7 @@ class TestImportanceScoring:
         """High access count yields high importance score."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -429,7 +429,7 @@ class TestImportanceScoring:
         """Recent but low access yields moderate importance."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -447,7 +447,7 @@ class TestImportanceScoring:
         """Moderate recency and access yields high score."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -463,7 +463,7 @@ class TestImportanceScoring:
         """Memories with access_count >= PROTECTED_ACCESS_COUNT are protected."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -495,7 +495,7 @@ class TestAccessTracking:
             "metadatas": [[{"access_count": 5}, {"access_count": 2}]],
         }
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -514,7 +514,7 @@ class TestAccessTracking:
             "metadatas": [[{}]],  # No access_count
         }
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -534,7 +534,7 @@ class TestAccessTracking:
         }
         mock_chromadb.update.side_effect = Exception("Update failed")
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -562,7 +562,7 @@ class TestUniquenessScoring:
             "distances": [[0.0, 0.8]],  # High distance to neighbors
         }
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -587,7 +587,7 @@ class TestUniquenessScoring:
             "distances": [[0.0, 0.05]],  # Very close to neighbors
         }
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -600,7 +600,7 @@ class TestUniquenessScoring:
         """Single memory gets default uniqueness of 1.0."""
         from app.services.memory import MemoryService
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -614,7 +614,7 @@ class TestUniquenessScoring:
 
         mock_chromadb.get.side_effect = Exception("Get failed")
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -645,7 +645,7 @@ class TestDeduplication:
             "distances": [[0.0, 0.05]],  # 0.05 distance = 0.95 similarity
         }
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -672,7 +672,7 @@ class TestDeduplication:
             "distances": [[0.0, 0.01]],  # Very similar
         }
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -699,7 +699,7 @@ class TestDeduplication:
             "distances": [[0.0]],  # Only self-match
         }
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")
@@ -713,7 +713,7 @@ class TestDeduplication:
 
         mock_chromadb.get.side_effect = Exception("Get failed")
 
-        with patch("app.services.memory.chromadb.PersistentClient") as MockClient:
+        with patch("app.services.memory.service.chromadb.PersistentClient") as MockClient:
             MockClient.return_value.get_or_create_collection.return_value = mock_chromadb
 
             service = MemoryService(persistence_path="/tmp/test")

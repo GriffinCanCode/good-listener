@@ -1,22 +1,19 @@
 """Inference services: ML/AI business logic."""
 
-from app.services.transcription import TranscriptionService
-from app.services.vad import VADService
-from app.services.ocr import OCRService
-from app.services.llm import LLMService
-from app.services.memory import MemoryService
+from app.services.audio import TranscriptionService, VADService
 from app.services.health import HealthServicer, create_health_servicer
-from app.services.prompts import SYSTEM_PROMPT, ANALYSIS_TEMPLATE
+from app.services.llm import ANALYSIS_TEMPLATE, SYSTEM_PROMPT, LLMService
+from app.services.memory import MemoryService
+from app.services.ocr import OCRService
 
 __all__ = [
-    "TranscriptionService",
-    "VADService", 
-    "OCRService",
+    "ANALYSIS_TEMPLATE",
+    "SYSTEM_PROMPT",
+    "HealthServicer",
     "LLMService",
     "MemoryService",
-    "HealthServicer",
+    "OCRService",
+    "TranscriptionService",
+    "VADService",
     "create_health_servicer",
-    "SYSTEM_PROMPT",
-    "ANALYSIS_TEMPLATE",
 ]
-

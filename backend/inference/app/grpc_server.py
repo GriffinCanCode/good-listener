@@ -9,21 +9,30 @@ from concurrent import futures
 
 import grpc
 import numpy as np
+from dotenv import load_dotenv
 from grpc_health.v1 import health_pb2_grpc
 from PIL import Image
-from dotenv import load_dotenv
 
 load_dotenv()
 
-from app.core import get_logger, TraceContext, set_trace_context, span, TracingInterceptor
-from app.services.transcription import TranscriptionService
-from app.services.vad import VADService
-from app.services.ocr import OCRService
-from app.services.llm import LLMService
-from app.services.memory import MemoryService
-from app.services.health import create_health_servicer
 import app.pb.cognition_pb2 as pb
 import app.pb.cognition_pb2_grpc as pb_grpc
+from app.core import TraceContext, TracingInterceptor, get_logger, set_trace_context, span
+from app.services.constants import (
+    GRPC_DEFAULT_PORT,
+    GRPC_MAX_WORKERS,
+    GRPC_SHUTDOWN_GRACE_PERIOD,
+    MEMORY_QUERY_DEFAULT_RESULTS,
+    MIN_QUESTION_LENGTH,
+    SAMPLES_PER_SECOND,
+    SCREEN_CONTEXT_MAX_LENGTH,
+    VAD_DEFAULT_SAMPLE_RATE,
+)
+from app.services.audio import TranscriptionService, VADService
+from app.services.health import create_health_servicer
+from app.services.llm import LLMService
+from app.services.memory import MemoryService
+from app.services.ocr import OCRService
 
 logger = get_logger(__name__)
 
@@ -39,7 +48,7 @@ QUESTION_STARTERS = re.compile(
 def is_question(text: str) -> bool:
     """Detect if text is a question."""
     text = text.strip()
-    if not text or len(text) < 10:
+    if not text or len(text) < MIN_QUESTION_LENGTH:
         return False
     return text.endswith("?") or bool(QUESTION_STARTERS.match(text))
 
@@ -54,21 +63,22 @@ class TranscriptionServicer(pb_grpc.TranscriptionServiceServicer):
         with span("transcribe", audio_len=len(request.audio_data)):
             audio = np.frombuffer(request.audio_data, dtype=np.float32)
             text, confidence = self.service.transcribe(audio, request.language or None)
-            return pb.TranscribeResponse(text=text, confidence=confidence, duration_ms=int(len(audio) / 16))
+            duration_ms = int(len(audio) / (SAMPLES_PER_SECOND / 1000))
+            return pb.TranscribeResponse(text=text, confidence=confidence, duration_ms=duration_ms)
 
-    def StreamTranscribe(self, request_iterator, context):
+    def StreamTranscribe(self, request_iterator, _context):
         """Stream transcription - accumulates chunks and transcribes on silence."""
         buffer = []
         for chunk in request_iterator:
             audio = np.frombuffer(chunk.data, dtype=np.float32)
             buffer.extend(audio.tolist())
-            
-            # Yield partial results when buffer is large enough
-            if len(buffer) >= 16000:  # 1 second
+
+            # Yield partial results when buffer is large enough (1 second of audio)
+            if len(buffer) >= SAMPLES_PER_SECOND:
                 text, _ = self.service.transcribe(np.array(buffer))
                 if text:
                     yield pb.TranscriptSegment(
-                        text=text, 
+                        text=text,
                         device_id=chunk.device_id,
                         is_final=False,
                     )
@@ -83,10 +93,10 @@ class VADServicer(pb_grpc.VADServiceServicer):
         ctx = TraceContext.from_grpc_context(context)
         set_trace_context(ctx)
         audio = np.frombuffer(request.audio_chunk, dtype=np.float32)
-        prob, is_speech = self.service.detect_speech(audio, request.sample_rate or 16000)
+        prob, is_speech = self.service.detect_speech(audio, request.sample_rate or VAD_DEFAULT_SAMPLE_RATE)
         return pb.VADResponse(speech_probability=prob, is_speech=is_speech)
 
-    def ResetState(self, request: pb.ResetStateRequest, context) -> pb.ResetStateResponse:
+    def ResetState(self, _request: pb.ResetStateRequest, context) -> pb.ResetStateResponse:
         ctx = TraceContext.from_grpc_context(context)
         set_trace_context(ctx)
         self.service.reset_state()
@@ -103,19 +113,19 @@ class OCRServicer(pb_grpc.OCRServiceServicer):
         with span("ocr_extract", image_size=len(request.image_data)):
             image = Image.open(io.BytesIO(request.image_data))
             text = self.service.extract_text(image)
-        
+
         # Parse bounding boxes from OCR output format: [x1, y1, x2, y2] text
         boxes = []
         for line in text.split("\n"):
             if line.startswith("[") and "]" in line:
                 try:
                     coords_end = line.index("]") + 1
-                    coords = [int(x) for x in line[1:coords_end-1].split(", ")]
+                    coords = [int(x) for x in line[1 : coords_end - 1].split(", ")]
                     box_text = line[coords_end:].strip()
                     boxes.append(pb.BoundingBox(x1=coords[0], y1=coords[1], x2=coords[2], y2=coords[3], text=box_text))
                 except (ValueError, IndexError):
                     pass
-        
+
         return pb.OCRResponse(text=text, boxes=boxes)
 
 
@@ -136,17 +146,17 @@ class LLMServicer(pb_grpc.LLMServiceServicer):
         if request.transcript:
             context_parts.append(f"RECENT CONVERSATION:\n{request.transcript}")
         if request.context_text:
-            context_parts.append(f"SCREEN TEXT:\n{request.context_text[:2000]}")
+            context_parts.append(f"SCREEN TEXT:\n{request.context_text[:SCREEN_CONTEXT_MAX_LENGTH]}")
         context_text = "\n\n".join(context_parts) or "No context available."
-        
+
         # Parse image if provided
         image = None
         if request.image_data:
             image = Image.open(io.BytesIO(request.image_data))
-        
+
         async for chunk in self.service.analyze(context_text, request.user_query, image):
             yield pb.AnalyzeChunk(content=chunk, is_final=False)
-        
+
         yield pb.AnalyzeChunk(content="", is_final=True)
 
     def IsQuestion(self, request: pb.IsQuestionRequest, context) -> pb.IsQuestionResponse:
@@ -163,45 +173,52 @@ class MemoryServicer(pb_grpc.MemoryServiceServicer):
         ctx = TraceContext.from_grpc_context(context)
         set_trace_context(ctx)
         metadata = dict(request.metadata) if request.metadata else None
-        self.service.add_memory(request.text, request.source, metadata)
-        return pb.StoreResponse(success=True)
+        doc_id = self.service.add_memory(request.text, request.source, metadata)
+        return pb.StoreResponse(id=doc_id or "", success=doc_id is not None)
+
+    def BatchStore(self, request: pb.BatchStoreRequest, context) -> pb.BatchStoreResponse:
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
+        items = [(item.text, item.source, dict(item.metadata) if item.metadata else None) for item in request.items]
+        ids = self.service.add_memories_batch(items)
+        return pb.BatchStoreResponse(ids=ids, stored_count=len(ids))
 
     def Query(self, request: pb.QueryRequest, context) -> pb.QueryResponse:
         ctx = TraceContext.from_grpc_context(context)
         set_trace_context(ctx)
         filter_meta = {"source": request.source_filter} if request.source_filter else None
-        docs = self.service.query_memory(request.query_text, request.n_results or 5, filter_meta)
+        docs = self.service.query_memory(request.query_text, request.n_results or MEMORY_QUERY_DEFAULT_RESULTS, filter_meta)
         return pb.QueryResponse(documents=docs)
 
-    def Clear(self, request: pb.ClearRequest, context) -> pb.ClearResponse:
+    def Clear(self, _request: pb.ClearRequest, context) -> pb.ClearResponse:
         ctx = TraceContext.from_grpc_context(context)
         set_trace_context(ctx)
         return pb.ClearResponse(deleted_count=0)
 
 
-async def serve(port: int = 50051):
+async def serve(port: int = GRPC_DEFAULT_PORT):
     """Start the gRPC server with graceful shutdown."""
     server = grpc.aio.server(
-        futures.ThreadPoolExecutor(max_workers=10),
+        futures.ThreadPoolExecutor(max_workers=GRPC_MAX_WORKERS),
         interceptors=[TracingInterceptor()],
     )
-    
+
     memory_service = MemoryService()
-    
+
     # Create servicers
     transcription_servicer = TranscriptionServicer()
     vad_servicer = VADServicer()
     ocr_servicer = OCRServicer()
     llm_servicer = LLMServicer(memory_service)
     memory_servicer = MemoryServicer(memory_service)
-    
+
     # Register services
     pb_grpc.add_TranscriptionServiceServicer_to_server(transcription_servicer, server)
     pb_grpc.add_VADServiceServicer_to_server(vad_servicer, server)
     pb_grpc.add_OCRServiceServicer_to_server(ocr_servicer, server)
     pb_grpc.add_LLMServiceServicer_to_server(llm_servicer, server)
     pb_grpc.add_MemoryServiceServicer_to_server(memory_servicer, server)
-    
+
     # Register health check service with model availability checks
     health_servicer = create_health_servicer(
         transcription_svc=transcription_servicer.service,
@@ -210,35 +227,34 @@ async def serve(port: int = 50051):
         llm_svc=llm_servicer.service,
     )
     health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)
-    
+
     addr = f"[::]:{port}"
     server.add_insecure_port(addr)
-    
+
     # Graceful shutdown handler
     shutdown_event = asyncio.Event()
-    
-    def handle_shutdown(signum, frame):
+
+    def handle_shutdown(signum, _frame):
         sig_name = signal.Signals(signum).name
         logger.info("shutdown_signal_received", signal=sig_name)
         shutdown_event.set()
-    
+
     signal.signal(signal.SIGTERM, handle_shutdown)
     signal.signal(signal.SIGINT, handle_shutdown)
-    
+
     logger.info("grpc_server_starting", addr=addr)
     await server.start()
-    
+
     await shutdown_event.wait()
-    logger.info("graceful_shutdown_initiated", grace_period=10)
-    await server.stop(grace=10)
+    logger.info("graceful_shutdown_initiated", grace_period=GRPC_SHUTDOWN_GRACE_PERIOD)
+    await server.stop(grace=GRPC_SHUTDOWN_GRACE_PERIOD)
     logger.info("grpc_server_stopped")
 
 
 def main():
-    port = int(os.getenv("GRPC_PORT", "50051"))
+    port = int(os.getenv("GRPC_PORT", str(GRPC_DEFAULT_PORT)))
     asyncio.run(serve(port))
 
 
 if __name__ == "__main__":
     main()
-
