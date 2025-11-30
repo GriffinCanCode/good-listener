@@ -386,8 +386,12 @@ body {
   padding: 16px;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
   gap: 16px;
+  min-height: 0;
+}
+
+.chat-spacer {
+  flex: 1 1 auto;
   min-height: 0;
 }
 

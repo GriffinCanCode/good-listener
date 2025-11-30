@@ -38,9 +38,11 @@ const App: React.FC = () => {
     createSession();
   }, []);
 
-  // Scroll to bottom on messages/stream change
+  // Scroll to bottom on messages/stream change (only if there's content)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (messages.length > 0 || stream) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages.length, stream]);
 
   // Electron listeners
@@ -117,6 +119,7 @@ const App: React.FC = () => {
                 </div>
             ) : (
                 <>
+                <div className="chat-spacer" />
                 {messages.map((m, i) => (
                     <motion.div 
                     key={i} 
