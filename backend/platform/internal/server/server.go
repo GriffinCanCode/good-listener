@@ -159,7 +159,10 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	for {
 		var msg json.RawMessage
 		if err := wsjson.Read(baseCtx, conn, &msg); err != nil {
-			log.Debug("websocket read error", "error", err)
+			if s := websocket.CloseStatus(err); s == websocket.StatusNormalClosure || s == websocket.StatusGoingAway {
+				return
+			}
+			log.Error("websocket read error", "error", err)
 			return
 		}
 
