@@ -162,6 +162,12 @@ const App: React.FC = () => {
     []
   );
 
+  const handleRemember = useCallback(() => {
+    if (status === 'connected') {
+      sendMessage('Please remember this context.');
+    }
+  }, [status, sendMessage]);
+
   return (
     <div className="app-container">
       <Sidebar />
@@ -217,7 +223,7 @@ const App: React.FC = () => {
             )}
           </div>
 
-          {showTranscript && <LiveTranscript />}
+          {showTranscript && <LiveTranscript onRemember={handleRemember} />}
         </div>
 
         <div className="input-area">

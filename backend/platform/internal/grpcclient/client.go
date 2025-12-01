@@ -366,51 +366,6 @@ func (c *Client) IsQuestion(ctx context.Context, text string) (bool, error) {
 	return result, err
 }
 
-// StoreMemory stores text in vector memory.
-func (c *Client) StoreMemory(ctx context.Context, text, source string) error {
-	err := c.withBreaker(func() error {
-		_, err := c.Memory.Store(ctx, &pb.StoreRequest{
-			Text:   text,
-			Source: source,
-		})
-		return err
-	})
-	if err != nil {
-		slog.Warn("failed to store memory", "error", err)
-	}
-	return err
-}
-
-// MemoryItem represents a single memory item for batch operations.
-type MemoryItem struct {
-	Text   string
-	Source string
-}
-
-// BatchStoreMemory stores multiple texts in vector memory efficiently.
-func (c *Client) BatchStoreMemory(ctx context.Context, items []MemoryItem) (int32, error) {
-	if len(items) == 0 {
-		return 0, nil
-	}
-	var storedCount int32
-	err := c.withBreaker(func() error {
-		pbItems := make([]*pb.StoreRequest, len(items))
-		for i, item := range items {
-			pbItems[i] = &pb.StoreRequest{Text: item.Text, Source: item.Source}
-		}
-		resp, err := c.Memory.BatchStore(ctx, &pb.BatchStoreRequest{Items: pbItems})
-		if err != nil {
-			return err
-		}
-		storedCount = resp.StoredCount
-		return nil
-	})
-	if err != nil {
-		slog.Warn("failed to batch store memory", "error", err, "count", len(items))
-	}
-	return storedCount, err
-}
-
 // QueryMemory retrieves relevant memories.
 func (c *Client) QueryMemory(ctx context.Context, query string, n int32) ([]string, error) {
 	var result []string

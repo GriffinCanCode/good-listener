@@ -20,16 +20,10 @@ type OCRClient interface {
 	ExtractText(ctx context.Context, imageData []byte, format string) (string, error)
 }
 
-// MemoryClient interface for storing screen content.
-type MemoryClient interface {
-	StoreMemory(ctx context.Context, text, source string) error
-}
-
 // Processor handles screen capture and OCR.
 type Processor struct {
 	capturer  screencap.Capturer
 	ocr       OCRClient
-	memory    MemoryClient
 	mu        sync.RWMutex
 	text      string
 	image     []byte
@@ -38,11 +32,10 @@ type Processor struct {
 }
 
 // NewProcessor creates a screen processor.
-func NewProcessor(capturer screencap.Capturer, ocr OCRClient, memory MemoryClient) *Processor {
+func NewProcessor(capturer screencap.Capturer, ocr OCRClient) *Processor {
 	return &Processor{
 		capturer:  capturer,
 		ocr:       ocr,
-		memory:    memory,
 		recording: true,
 	}
 }
@@ -52,9 +45,6 @@ func (p *Processor) Run(ctx context.Context, captureRate float64, stopCh <-chan 
 	interval := time.Duration(float64(time.Second) / captureRate)
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
-
-	var lastStoredText string
-	stableCount := 0
 
 	for {
 		select {
@@ -84,19 +74,7 @@ func (p *Processor) Run(ctx context.Context, captureRate float64, stopCh <-chan 
 			}
 
 			p.mu.Lock()
-			if text != p.text {
-				p.text = text
-				stableCount = 0
-			} else {
-				stableCount++
-			}
-
-			// Store stable screen text to memory
-			if p.recording && stableCount >= StableCountThreshold && text != lastStoredText && len(text) > MinTextLengthForStorage {
-				go func(t string) { _ = p.memory.StoreMemory(ctx, t, "screen") }(text)
-				lastStoredText = text
-				stableCount = 0
-			}
+			p.text = text
 			p.mu.Unlock()
 		}
 	}

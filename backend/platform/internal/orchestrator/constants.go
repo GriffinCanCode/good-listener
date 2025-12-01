@@ -16,9 +16,6 @@ const (
 	AutoAnswerChannelBuffer = 10
 	VADChannelBuffer        = 50
 
-	// Speech processing thresholds
-	MinWordsForMemoryStorage = 4
-
 	// Transcript retrieval durations (seconds)
 	AutoAnswerTranscriptSeconds = 120
 	AnalyzeTranscriptSeconds    = 300

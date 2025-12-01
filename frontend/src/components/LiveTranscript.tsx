@@ -1,5 +1,5 @@
 import gsap from 'gsap';
-import { Activity, Mic, User } from 'lucide-react';
+import { Activity, Mic, Save, User } from 'lucide-react';
 import React, { memo, useEffect, useRef } from 'react';
 import { useAutoScroll } from '../hooks/useAutoScroll';
 import { useVirtualList } from '../hooks/useVirtualList';
@@ -106,12 +106,27 @@ const TranscriptList = memo(() => {
 TranscriptList.displayName = 'TranscriptList';
 
 export const LiveTranscript = memo(
-  React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>((props, ref) => {
+  React.forwardRef<
+    HTMLDivElement,
+    React.HTMLAttributes<HTMLDivElement> & { onRemember?: () => void }
+  >(({ onRemember, ...props }, ref) => {
     return (
       <div ref={ref} className="live-transcript-wrapper" {...props}>
         <div className="transcript-header">
           <span>Live Transcript</span>
-          <Activity size={14} style={{ opacity: 0.5 }} />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            {onRemember && (
+              <button
+                onClick={onRemember}
+                className="icon-btn"
+                title="Remember this context"
+                style={{ width: 24, height: 24 }}
+              >
+                <Save size={14} />
+              </button>
+            )}
+            <Activity size={14} style={{ opacity: 0.5 }} />
+          </div>
         </div>
         <VoiceActivityIndicator />
         <TranscriptList />

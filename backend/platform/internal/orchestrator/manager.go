@@ -12,7 +12,6 @@ import (
 	"github.com/GriffinCanCode/good-listener/backend/platform/internal/grpcclient"
 	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/audio"
 	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/autoanswer"
-	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/memory"
 	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/screen"
 	"github.com/GriffinCanCode/good-listener/backend/platform/internal/orchestrator/transcript"
 	screencap "github.com/GriffinCanCode/good-listener/backend/platform/internal/screen"
@@ -52,7 +51,6 @@ type Manager struct {
 	autoAnswer     *autoanswer.Detector
 	autoAnswerChan chan AutoAnswerEvent
 	vadChan        chan VADEvent
-	memBatcher     *memory.Batcher
 
 	mu        sync.RWMutex
 	recording bool
@@ -70,7 +68,6 @@ func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 
 	transcripts := transcript.NewStore(TranscriptMaxEntries, TranscriptEventBuffer)
 	autoAnswerDet := autoanswer.NewDetector(inference, cfg.AutoAnswer.CooldownSeconds, cfg.AutoAnswer.Enabled)
-	memBatcher := memory.NewBatcher(inference, cfg.Memory.BatchMaxSize, time.Duration(cfg.Memory.BatchFlushDelayMs)*time.Millisecond)
 
 	m := &Manager{
 		inference:      inference,
@@ -80,7 +77,6 @@ func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 		autoAnswer:     autoAnswerDet,
 		autoAnswerChan: make(chan AutoAnswerEvent, AutoAnswerChannelBuffer),
 		vadChan:        make(chan VADEvent, VADChannelBuffer),
-		memBatcher:     memBatcher,
 		recording:      false,
 		stopCh:         make(chan struct{}),
 	}
@@ -94,22 +90,10 @@ func New(inference *grpcclient.Client, cfg *config.Config) *Manager {
 		}, m.handleSpeech, m.handleVAD)
 	}
 
-	// Create screen processor with batched memory client
-	m.screenProc = screen.NewProcessor(screencap.New(), inference, m)
+	// Create screen processor
+	m.screenProc = screen.NewProcessor(screencap.New(), inference)
 
 	return m
-}
-
-// StoreMemory implements screen.MemoryClient using the batcher.
-func (m *Manager) StoreMemory(_ context.Context, text, source string) error {
-	m.mu.RLock()
-	recording := m.recording
-	m.mu.RUnlock()
-	if !recording {
-		return nil
-	}
-	m.memBatcher.Add(text, source)
-	return nil
 }
 
 // handleSpeech processes completed speech segments.
@@ -355,9 +339,6 @@ func (m *Manager) Stop() {
 	}
 	if m.audioProc != nil {
 		m.audioProc.Reset()
-	}
-	if m.memBatcher != nil {
-		m.memBatcher.Stop()
 	}
 }
 
