@@ -558,11 +558,10 @@ textarea::placeholder {
 /* -------------------------------------------------------------------------- */
 
 .vad-indicator {
-  margin: 16px;
-  padding: 12px;
-  background: var(--glass-surface);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
+  margin: 0;
+  padding: 8px 16px;
+  background: transparent;
+  border-bottom: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -571,25 +570,44 @@ textarea::placeholder {
 
 .vad-channel {
   display: flex;
-  flex-direction: column;
   align-items: center;
   gap: 8px;
   flex: 1;
+  justify-content: center;
 }
 
 .vad-channel-header {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 4px;
 }
 
 .vad-icon {
   transition: all 0.2s ease;
+  will-change: transform, filter;
+}
+
+.speaking .vad-icon {
+  animation: breathe 2s infinite ease-in-out;
+}
+
+@keyframes breathe {
+  0% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 transparent);
+  }
+  50% {
+    transform: scale(1.1);
+    filter: drop-shadow(0 0 8px var(--glow-color));
+  }
+  100% {
+    transform: scale(1);
+    filter: drop-shadow(0 0 0 transparent);
+  }
 }
 
 .vad-label {
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
   text-transform: uppercase;
   color: var(--text-tertiary);
@@ -598,29 +616,34 @@ textarea::placeholder {
 
 .vad-bars {
   display: flex;
-  gap: 3px;
-  height: 24px;
+  gap: 2px;
+  height: 12px;
   align-items: center;
 }
 
 .vad-bar {
-  width: 4px;
+  width: 3px;
   height: 100%;
   background: var(--text-tertiary);
-  border-radius: 2px;
-  transition: height 0.1s ease;
+  border-radius: 1px;
+  transition:
+    transform 0.1s ease,
+    opacity 0.1s ease;
+  will-change: transform, opacity;
 }
 
 .vad-probability {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
-  opacity: 0; /* Fade in when active */
+  transition: opacity 0.15s ease;
+  min-width: 24px;
+  text-align: right;
 }
 
 .vad-divider {
   width: 1px;
-  height: 32px;
+  height: 16px;
   background: var(--glass-border);
 }
 
@@ -703,6 +726,68 @@ textarea::placeholder {
   font-size: 13px;
   color: var(--text-secondary);
   line-height: 1.5;
+}
+
+.auto-answer-loading {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+  padding: 12px;
+}
+
+.pulse-dot {
+  width: 6px;
+  height: 6px;
+  background: var(--text-secondary);
+  border-radius: 50%;
+  animation: pulse-dot 1.4s infinite;
+}
+
+.pulse-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+.pulse-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.2;
+    transform: scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.auto-answer-streaming {
+  margin-top: 8px;
+  display: flex;
+  justify-content: center;
+}
+
+.streaming-indicator {
+  display: block;
+  width: 8px;
+  height: 8px;
+  background: var(--accent-primary);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-glow);
+  animation: pulse-stream 1s infinite;
+}
+
+@keyframes pulse-stream {
+  0% {
+    box-shadow: 0 0 0 0 var(--accent-glow);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
 }
 
 /* Scrollbar */
