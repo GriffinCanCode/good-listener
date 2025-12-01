@@ -144,15 +144,6 @@ func (m *Manager) handleSpeech(ctx context.Context, samples []float32, source st
 	m.transcripts.Add(text, source, speaker)
 	m.transcripts.Emit(TranscriptEvent{Text: text, Source: source, Speaker: speaker})
 
-	// Store to vector DB if recording (batched for efficiency)
-	m.mu.RLock()
-	shouldStore := m.recording && len(strings.Fields(text)) >= MinWordsForMemoryStorage
-	m.mu.RUnlock()
-
-	if shouldStore {
-		m.memBatcher.Add(source+": "+text, "audio")
-	}
-
 	// Check for auto-answer (support both user and system sources)
 	if m.autoAnswer.Check(ctx, text) {
 		go m.streamAutoAnswer(ctx, text)
@@ -195,7 +186,7 @@ func (m *Manager) streamAutoAnswer(ctx context.Context, question string) {
 	m.autoAnswerChan <- AutoAnswerEvent{Type: "start", Question: question}
 
 	req := &pb.AnalyzeRequest{
-		UserQuery:   "Answer this question concisely: " + question,
+		UserQuery:   "Answer this question (use general knowledge/assumptions if context is missing): " + question,
 		Transcript:  m.GetRecentTranscript(AutoAnswerTranscriptSeconds),
 		ContextText: m.GetLatestScreenText(),
 	}

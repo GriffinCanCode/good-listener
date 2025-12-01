@@ -181,8 +181,10 @@ export const useChatStore = create<ChatState>()(
 
       clearTranscripts: () => set({ liveTranscripts: [] }),
 
-      startAutoAnswer: (question) =>
+      startAutoAnswer: (question) => {
+        get().addMessageToCurrent({ role: 'user', content: question });
         set({
+          stream: '',
           autoAnswer: {
             id: Date.now().toString(),
             question,
@@ -190,19 +192,23 @@ export const useChatStore = create<ChatState>()(
             isStreaming: true,
             timestamp: Date.now(),
           },
-        }),
+        });
+      },
 
       appendAutoAnswer: (content) =>
         set((state) => ({
+          stream: state.stream + content,
           autoAnswer: state.autoAnswer
             ? { ...state.autoAnswer, content: state.autoAnswer.content + content }
             : null,
         })),
 
-      finishAutoAnswer: () =>
+      finishAutoAnswer: () => {
+        get().commitStreamToMessage();
         set((state) => ({
           autoAnswer: state.autoAnswer ? { ...state.autoAnswer, isStreaming: false } : null,
-        })),
+        }));
+      },
 
       dismissAutoAnswer: () => set({ autoAnswer: null }),
 
