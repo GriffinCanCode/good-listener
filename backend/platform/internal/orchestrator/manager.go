@@ -153,8 +153,8 @@ func (m *Manager) handleSpeech(ctx context.Context, samples []float32, source st
 		m.memBatcher.Add(source+": "+text, "audio")
 	}
 
-	// Check for auto-answer on system audio
-	if source == "system" && m.autoAnswer.Check(ctx, text) {
+	// Check for auto-answer (support both user and system sources)
+	if m.autoAnswer.Check(ctx, text) {
 		go m.streamAutoAnswer(ctx, text)
 	}
 }

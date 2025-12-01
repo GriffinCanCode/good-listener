@@ -12,7 +12,6 @@ import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { LiveTranscript } from './components/LiveTranscript';
 import { MicButton } from './components/MicButton';
-import { Presence } from './components/Presence';
 import { Sidebar } from './components/Sidebar';
 import { Stoplight } from './components/Stoplight';
 import { useAutoScroll } from './hooks/useAutoScroll';
@@ -194,15 +193,13 @@ const App: React.FC = () => {
         </div>
 
         <div className="chat-container">
-          <Presence animation="scaleUp">
-            {autoAnswer && (
-              <AutoAnswerCard
-                key="auto-answer"
-                autoAnswer={autoAnswer}
-                onDismiss={dismissAutoAnswer}
-              />
-            )}
-          </Presence>
+          {autoAnswer && (
+            <AutoAnswerCard
+              key="auto-answer"
+              autoAnswer={autoAnswer}
+              onDismiss={dismissAutoAnswer}
+            />
+          )}
 
           <div ref={containerRef} className="chat-area">
             {messages.length === 0 && !stream ? (
@@ -220,9 +217,7 @@ const App: React.FC = () => {
             )}
           </div>
 
-          <Presence animation="slideLeft">
-            {showTranscript && <LiveTranscript key="transcript" />}
-          </Presence>
+          {showTranscript && <LiveTranscript />}
         </div>
 
         <div className="input-area">

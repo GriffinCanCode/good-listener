@@ -44,7 +44,7 @@ logger = get_logger(__name__)
 QUESTION_STARTERS = re.compile(
     r"^(who|what|where|when|why|how|can|could|would|should|is|are|do|does|did|"
     r"have|has|will|won't|isn't|aren't|don't|doesn't|didn't|haven't|hasn't|"
-    r"was|were|which|shall|may|might|tell me)\b",
+    r"was|were|which|shall|may|might|tell me|now|right)\b",
     re.IGNORECASE,
 )
 
@@ -52,7 +52,7 @@ QUESTION_STARTERS = re.compile(
 def is_question(text: str, min_length: int) -> bool:
     """Detect if text is a question."""
     text = text.strip()
-    if not text or len(text) < min_length:
+    if not text or len(text) < 5:  # Reduced min length check
         return False
     return text.endswith("?") or bool(QUESTION_STARTERS.match(text))
 
