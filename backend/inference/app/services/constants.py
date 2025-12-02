@@ -22,11 +22,16 @@ VAD_DEFAULT_THRESHOLD = 0.5
 VAD_DEFAULT_SAMPLE_RATE = 16000
 
 # Transcription Constants
-WHISPER_BEAM_SIZE = 1
+WHISPER_BEAM_SIZE = 3
 
 # Diarization Constants
 DIARIZATION_MODEL = "pyannote/speaker-diarization-3.1"
 DIARIZATION_MIN_SPEAKERS = 1
+
+# Speaker Detection Constants (fast embedding-based)
+SPEAKER_EMBEDDING_MODEL = "pyannote/embedding"
+SPEAKER_SIMILARITY_THRESHOLD = 0.75  # Cosine similarity threshold for same speaker
+SPEAKER_MIN_AUDIO_LENGTH = 0.5  # Minimum seconds of audio for reliable embedding
 
 # Question Detection Constants
 MIN_QUESTION_LENGTH = 10

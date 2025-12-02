@@ -132,6 +132,16 @@ func (m *Manager) handleSpeech(ctx context.Context, samples []float32, source st
 	speaker := "Speaker"
 	if source == "user" {
 		speaker = "You"
+	} else if source == "system" {
+		// Use fast speaker detection for system audio (multiple speakers)
+		speakerID, totalSpeakers, err := m.inference.DetectSpeaker(ctx, audioBytes, int32(m.cfg.Audio.SampleRate), source)
+		if err != nil {
+			log.Warn("speaker detection failed, using default", "error", err)
+		} else {
+			speaker = speakerID
+			span.SetAttr("detected_speaker", speakerID)
+			span.SetAttr("total_speakers", totalSpeakers)
+		}
 	}
 
 	log.Info("transcribed", "source", source, "speaker", speaker, "text", text)

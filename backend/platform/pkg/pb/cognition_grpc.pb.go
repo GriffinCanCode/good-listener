@@ -22,6 +22,7 @@ const (
 	TranscriptionService_Transcribe_FullMethodName       = "/cognition.TranscriptionService/Transcribe"
 	TranscriptionService_StreamTranscribe_FullMethodName = "/cognition.TranscriptionService/StreamTranscribe"
 	TranscriptionService_Diarize_FullMethodName          = "/cognition.TranscriptionService/Diarize"
+	TranscriptionService_DetectSpeaker_FullMethodName    = "/cognition.TranscriptionService/DetectSpeaker"
 )
 
 // TranscriptionServiceClient is the client API for TranscriptionService service.
@@ -34,6 +35,8 @@ type TranscriptionServiceClient interface {
 	StreamTranscribe(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AudioChunk, TranscriptSegment], error)
 	// Diarize audio to identify speakers with timestamps
 	Diarize(ctx context.Context, in *DiarizeRequest, opts ...grpc.CallOption) (*DiarizeResponse, error)
+	// Fast speaker detection using embeddings (much faster than full diarization)
+	DetectSpeaker(ctx context.Context, in *DetectSpeakerRequest, opts ...grpc.CallOption) (*DetectSpeakerResponse, error)
 }
 
 type transcriptionServiceClient struct {
@@ -77,6 +80,16 @@ func (c *transcriptionServiceClient) Diarize(ctx context.Context, in *DiarizeReq
 	return out, nil
 }
 
+func (c *transcriptionServiceClient) DetectSpeaker(ctx context.Context, in *DetectSpeakerRequest, opts ...grpc.CallOption) (*DetectSpeakerResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DetectSpeakerResponse)
+	err := c.cc.Invoke(ctx, TranscriptionService_DetectSpeaker_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TranscriptionServiceServer is the server API for TranscriptionService service.
 // All implementations must embed UnimplementedTranscriptionServiceServer
 // for forward compatibility.
@@ -87,6 +100,8 @@ type TranscriptionServiceServer interface {
 	StreamTranscribe(grpc.BidiStreamingServer[AudioChunk, TranscriptSegment]) error
 	// Diarize audio to identify speakers with timestamps
 	Diarize(context.Context, *DiarizeRequest) (*DiarizeResponse, error)
+	// Fast speaker detection using embeddings (much faster than full diarization)
+	DetectSpeaker(context.Context, *DetectSpeakerRequest) (*DetectSpeakerResponse, error)
 	mustEmbedUnimplementedTranscriptionServiceServer()
 }
 
@@ -105,6 +120,9 @@ func (UnimplementedTranscriptionServiceServer) StreamTranscribe(grpc.BidiStreami
 }
 func (UnimplementedTranscriptionServiceServer) Diarize(context.Context, *DiarizeRequest) (*DiarizeResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Diarize not implemented")
+}
+func (UnimplementedTranscriptionServiceServer) DetectSpeaker(context.Context, *DetectSpeakerRequest) (*DetectSpeakerResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DetectSpeaker not implemented")
 }
 func (UnimplementedTranscriptionServiceServer) mustEmbedUnimplementedTranscriptionServiceServer() {}
 func (UnimplementedTranscriptionServiceServer) testEmbeddedByValue()                              {}
@@ -170,6 +188,24 @@ func _TranscriptionService_Diarize_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TranscriptionService_DetectSpeaker_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DetectSpeakerRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TranscriptionServiceServer).DetectSpeaker(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: TranscriptionService_DetectSpeaker_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TranscriptionServiceServer).DetectSpeaker(ctx, req.(*DetectSpeakerRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TranscriptionService_ServiceDesc is the grpc.ServiceDesc for TranscriptionService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -184,6 +220,10 @@ var TranscriptionService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Diarize",
 			Handler:    _TranscriptionService_Diarize_Handler,
+		},
+		{
+			MethodName: "DetectSpeaker",
+			Handler:    _TranscriptionService_DetectSpeaker_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

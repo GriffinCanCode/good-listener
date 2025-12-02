@@ -266,6 +266,26 @@ func (c *Client) Diarize(ctx context.Context, audio []byte, sampleRate, minSpeak
 	return result, err
 }
 
+// DetectSpeaker performs fast speaker detection using embeddings.
+func (c *Client) DetectSpeaker(ctx context.Context, audio []byte, sampleRate int32, source string) (string, int32, error) {
+	var speakerID string
+	var totalSpeakers int32
+	err := c.withBreaker(func() error {
+		resp, err := c.Transcription.DetectSpeaker(ctx, &pb.DetectSpeakerRequest{
+			AudioData:  audio,
+			SampleRate: sampleRate,
+			Source:     source,
+		})
+		if err != nil {
+			return err
+		}
+		speakerID = resp.SpeakerId
+		totalSpeakers = resp.TotalSpeakers
+		return nil
+	})
+	return speakerID, totalSpeakers, err
+}
+
 // DetectSpeech checks if audio chunk contains speech.
 func (c *Client) DetectSpeech(ctx context.Context, audio []byte, sampleRate int32) (float32, bool, error) {
 	var prob float32

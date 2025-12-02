@@ -31,7 +31,7 @@ from app.core import (
     set_trace_context,
     span,
 )
-from app.services.audio import DiarizationService, TranscriptionService, VADService
+from app.services.audio import DiarizationService, SpeakerDetectionService, TranscriptionService, VADService
 from app.services.constants import DIARIZATION_MIN_SPEAKERS, SAMPLES_PER_SECOND
 from app.services.health import create_health_servicer
 from app.services.llm import LLMService
@@ -59,8 +59,9 @@ def is_question(text: str, min_length: int) -> bool:
 
 class TranscriptionServicer(pb_grpc.TranscriptionServiceServicer):
     def __init__(self, auth_token: str | None = None):
-        self.service = TranscriptionService()
+        self.service = TranscriptionService(model_size=get_config().audio.whisper_model)
         self._diarization: DiarizationService | None = None
+        self._speaker_detection: SpeakerDetectionService | None = None
         self._auth_token = auth_token
 
     @property
@@ -69,6 +70,13 @@ class TranscriptionServicer(pb_grpc.TranscriptionServiceServicer):
         if self._diarization is None:
             self._diarization = DiarizationService(auth_token=self._auth_token)
         return self._diarization
+
+    @property
+    def speaker_detection(self) -> SpeakerDetectionService:
+        """Lazy-load speaker detection service (fast embeddings)."""
+        if self._speaker_detection is None:
+            self._speaker_detection = SpeakerDetectionService()
+        return self._speaker_detection
 
     def Transcribe(self, request: pb.TranscribeRequest, context) -> pb.TranscribeResponse:
         ctx = TraceContext.from_grpc_context(context)
@@ -109,6 +117,17 @@ class TranscriptionServicer(pb_grpc.TranscriptionServiceServicer):
             return pb.DiarizeResponse(
                 segments=[pb.SpeakerSegment(speaker=s.speaker, start_sec=s.start, end_sec=s.end) for s in segments]
             )
+
+    def DetectSpeaker(self, request: pb.DetectSpeakerRequest, context) -> pb.DetectSpeakerResponse:
+        ctx = TraceContext.from_grpc_context(context)
+        set_trace_context(ctx)
+        with span("detect_speaker", audio_len=len(request.audio_data), source=request.source):
+            audio = np.frombuffer(request.audio_data, dtype=np.float32)
+            sample_rate = request.sample_rate or SAMPLES_PER_SECOND
+            source = request.source or "system"
+            speaker_id = self.speaker_detection.detect_speaker(audio, sample_rate, source)
+            total_speakers = self.speaker_detection.get_speaker_count(source)
+            return pb.DetectSpeakerResponse(speaker_id=speaker_id, total_speakers=total_speakers)
 
 
 class VADServicer(pb_grpc.VADServiceServicer):
