@@ -14,7 +14,7 @@ import { useUIStore } from './store/useUIStore';
 
 const API_BASE = 'http://127.0.0.1:8000';
 const DEFAULT_WIDTH = 400;
-const TRANSCRIPT_WIDTH = 320;
+const TRANSCRIPT_WIDTH = 360;
 const DEFAULT_HEIGHT = 600;
 
 interface AutoAnswerCardProps {

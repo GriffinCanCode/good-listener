@@ -28,6 +28,8 @@ export function createMainWindow(): BrowserWindow {
     resizable: true,
     hasShadow: true,
     skipTaskbar: true,
+    vibrancy: 'under-window',
+    visualEffectState: 'active',
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       nodeIntegration: false,

@@ -33,6 +33,7 @@ class AudioConfig:
     max_silence_chunks: int = 15
     capture_system_audio: bool = True
     excluded_devices: tuple[str, ...] = ("iphone", "teams")
+    whisper_model: str = "medium.en"
 
 
 @dataclass(frozen=True, slots=True)
@@ -145,6 +146,7 @@ def load_config() -> Config:
             max_silence_chunks=int(os.getenv("MAX_SILENCE_CHUNKS", "15")),
             capture_system_audio=_parse_bool(os.getenv("CAPTURE_SYSTEM_AUDIO", "true")),
             excluded_devices=_parse_list(os.getenv("EXCLUDED_AUDIO_DEVICES", "iphone,teams")),
+            whisper_model=os.getenv("WHISPER_MODEL", "medium.en"),
         ),
         screen=ScreenConfig(
             capture_rate=float(os.getenv("SCREEN_CAPTURE_RATE", "1.0")),

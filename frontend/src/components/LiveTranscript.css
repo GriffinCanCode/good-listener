@@ -1,9 +1,7 @@
 .live-transcript-wrapper {
-  width: 320px;
+  width: 360px;
   height: 100%;
-  background: rgba(10, 10, 10, 0.6);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
+  background: transparent;
   border-left: 1px solid var(--glass-border);
   display: flex;
   flex-direction: column;
@@ -30,7 +28,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: rgba(0, 0, 0, 0.2);
+  background: transparent;
 }
 
 .live-transcript-container {

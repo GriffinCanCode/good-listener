@@ -2,11 +2,11 @@
 
 :root {
   /* Core Surface Colors */
-  --bg-app: #000000;
+  --bg-app: rgba(0, 0, 0, 0.3);
 
   /* Glass System */
-  --glass-base: rgba(22, 22, 24, 0.7);
-  --glass-surface: rgba(255, 255, 255, 0.03);
+  --glass-base: rgba(22, 22, 24, 0.4);
+  --glass-surface: rgba(255, 255, 255, 0.05);
   --glass-highlight: rgba(255, 255, 255, 0.06);
   --glass-border: rgba(255, 255, 255, 0.08);
   --glass-border-strong: rgba(255, 255, 255, 0.12);
@@ -71,7 +71,8 @@ body {
   background: var(--bg-app);
   border-radius: var(--radius-md);
   /* Subtle Gradient Background */
-  background: radial-gradient(circle at 50% -20%, #1a1a2e, #000000 60%);
+  background: radial-gradient(circle at 50% -20%, rgba(26, 26, 46, 0.5), rgba(0, 0, 0, 0.4) 60%);
+  border: 0.5px solid var(--glass-border);
 }
 
 /* Optional subtle grain */
