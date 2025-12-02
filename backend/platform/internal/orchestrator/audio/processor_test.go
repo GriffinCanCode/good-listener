@@ -49,7 +49,7 @@ func TestProcessorCreation(t *testing.T) {
 	vad := &mockVAD{}
 	cfg := Config{SampleRate: 16000, VADThreshold: 0.5, MaxSilenceChunks: 15}
 	called := false
-	p := NewProcessor(vad, cfg, func(_ context.Context, _ []float32, _ string) { called = true })
+	p := NewProcessor(vad, cfg, func(_ context.Context, _ []float32, _ string) { called = true }, func(_ float32, _ bool, _ string) {})
 
 	if p == nil {
 		t.Fatal("expected processor, got nil")
@@ -65,7 +65,7 @@ func TestProcessorCreation(t *testing.T) {
 func TestProcessorReset(t *testing.T) {
 	vad := &mockVAD{}
 	cfg := Config{SampleRate: 16000, VADThreshold: 0.5, MaxSilenceChunks: 15}
-	p := NewProcessor(vad, cfg, func(_ context.Context, _ []float32, _ string) {})
+	p := NewProcessor(vad, cfg, func(_ context.Context, _ []float32, _ string) {}, func(_ float32, _ bool, _ string) {})
 
 	// Add some state
 	p.mu.Lock()
@@ -84,7 +84,7 @@ func TestProcessorReset(t *testing.T) {
 func TestProcessChunkCreatesState(t *testing.T) {
 	vad := &mockVAD{}
 	cfg := Config{SampleRate: 16000, VADThreshold: 0.5, MaxSilenceChunks: 15}
-	p := NewProcessor(vad, cfg, func(_ context.Context, _ []float32, _ string) {})
+	p := NewProcessor(vad, cfg, func(_ context.Context, _ []float32, _ string) {}, func(_ float32, _ bool, _ string) {})
 
 	chunk := audiocap.Chunk{
 		Data:     make([]float32, 100),

@@ -159,11 +159,13 @@ class OCRServicer(pb_grpc.OCRServiceServicer):
 class LLMServicer(pb_grpc.LLMServiceServicer):
     def __init__(self, memory_service: MemoryService):
         cfg = get_config()
-        self.service = LLMService(
+        self.default_service = LLMService(
             provider=cfg.llm.provider,
             model_name=cfg.llm.model,
             memory_service=memory_service,
         )
+        self.service = self.default_service  # For health check compatibility
+        self._memory_service = memory_service
         self._screen_context_max = cfg.llm.screen_context_max_length
         self._min_question_len = cfg.auto_answer.min_question_length
 
@@ -171,12 +173,32 @@ class LLMServicer(pb_grpc.LLMServiceServicer):
         ctx = TraceContext.from_grpc_context(context)
         set_trace_context(ctx)
         logger.info("llm_analyze_start", query_len=len(request.user_query))
+
+        # Check for configuration overrides in metadata
+        metadata = dict(context.invocation_metadata())
+        provider = metadata.get("x-llm-provider")
+        model = metadata.get("x-llm-model")
+        api_key = metadata.get("x-llm-api-key")
+        ollama_host = metadata.get("x-ollama-host")
+
+        if provider:
+            logger.info("llm_config_override", provider=provider, model=model)
+            service = LLMService(
+                provider=provider,
+                model_name=model or self.default_service.model_name,
+                memory_service=self._memory_service,
+                api_key=api_key,
+                ollama_host=ollama_host,
+            )
+        else:
+            service = self.default_service
+
         # Build context
         context_parts = []
         if request.transcript:
             context_parts.append(f"RECENT CONVERSATION:\n{request.transcript}")
         if request.context_text:
-            context_parts.append(f"SCREEN TEXT:\n{request.context_text[:self._screen_context_max]}")
+            context_parts.append(f"SCREEN TEXT:\n{request.context_text[: self._screen_context_max]}")
         context_text = "\n\n".join(context_parts) or "No context available."
 
         # Parse image if provided
@@ -184,7 +206,7 @@ class LLMServicer(pb_grpc.LLMServiceServicer):
         if request.image_data:
             image = Image.open(io.BytesIO(request.image_data))
 
-        async for chunk in self.service.analyze(context_text, request.user_query, image):
+        async for chunk in service.analyze(context_text, request.user_query, image):
             yield pb.AnalyzeChunk(content=chunk, is_final=False)
 
         yield pb.AnalyzeChunk(content="", is_final=True)
@@ -198,7 +220,7 @@ class LLMServicer(pb_grpc.LLMServiceServicer):
         ctx = TraceContext.from_grpc_context(context)
         set_trace_context(ctx)
         original_len = len(request.transcript)
-        summary = await self.service.summarize(request.transcript, request.max_length)
+        summary = await self.default_service.summarize(request.transcript, request.max_length)
         return pb.SummarizeResponse(summary=summary, original_length=original_len, summary_length=len(summary))
 
 
@@ -225,7 +247,9 @@ class MemoryServicer(pb_grpc.MemoryServiceServicer):
         ctx = TraceContext.from_grpc_context(context)
         set_trace_context(ctx)
         filter_meta = {"source": request.source_filter} if request.source_filter else None
-        docs = self.service.query_memory(request.query_text, request.n_results or self._query_default_results, filter_meta)
+        docs = self.service.query_memory(
+            request.query_text, request.n_results or self._query_default_results, filter_meta
+        )
         return pb.QueryResponse(documents=docs)
 
     def Clear(self, _request: pb.ClearRequest, context) -> pb.ClearResponse:
@@ -248,11 +272,11 @@ async def warmup_models(
         # Trigger lazy loading by accessing properties
         # Run in thread pool to avoid blocking the event loop during load
         loop = asyncio.get_running_loop()
-        
+
         await loop.run_in_executor(None, lambda: getattr(transcription.service, "model"))
         await loop.run_in_executor(None, lambda: getattr(vad.service, "model"))
         await loop.run_in_executor(None, lambda: getattr(ocr.service, "engine"))
-        
+
         # Warm up diarization (pyannote)
         await loop.run_in_executor(None, lambda: getattr(transcription.diarization, "pipeline"))
 
@@ -318,12 +342,10 @@ async def serve(port: int | None = None):
     await server.start()
 
     # Schedule background warmup
-    warmup_task = loop.create_task(
-        warmup_models(transcription_servicer, vad_servicer, ocr_servicer)
-    )
+    warmup_task = loop.create_task(warmup_models(transcription_servicer, vad_servicer, ocr_servicer))
 
     await shutdown_event.wait()
-    
+
     # Cancel warmup if shutting down early
     if not warmup_task.done():
         warmup_task.cancel()

@@ -74,6 +74,13 @@ type VADMessage struct {
 	Source      string  `json:"source"`
 }
 
+type ConfigUpdateRequest struct {
+	Provider   string `json:"provider"`
+	Model      string `json:"model"`
+	APIKey     string `json:"api_key"`
+	OllamaHost string `json:"ollama_host"`
+}
+
 // Server handles HTTP and WebSocket connections.
 type Server struct {
 	orch        *orchestrator.Orchestrator
@@ -109,6 +116,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/capture", s.handleCapture)
 	mux.HandleFunc("POST /api/recording/start", s.handleRecordingStart)
 	mux.HandleFunc("POST /api/recording/stop", s.handleRecordingStop)
+	mux.HandleFunc("POST /api/config", s.handleConfigUpdate)
 
 	// Apply middleware: trace -> CORS
 	return corsMiddleware(trace.Middleware(mux))
@@ -309,4 +317,17 @@ func (s *Server) handleRecordingStart(w http.ResponseWriter, r *http.Request) {
 func (s *Server) handleRecordingStop(w http.ResponseWriter, r *http.Request) {
 	s.orch.SetRecording(false)
 	json.NewEncoder(w).Encode(map[string]string{"status": "recording_stopped"})
+}
+
+func (s *Server) handleConfigUpdate(w http.ResponseWriter, r *http.Request) {
+	var req ConfigUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	s.orch.UpdateLLMConfig(req.Provider, req.Model, req.APIKey, req.OllamaHost)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "config_updated"})
 }

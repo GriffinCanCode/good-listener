@@ -4,7 +4,7 @@ import { getMainWindow, resizeWindow } from '../../window';
 
 export function registerWindowHandlers(): void {
   ipcMain.on(IPC_CHANNELS.WINDOW_MINIMIZE, () => {
-    getMainWindow()?.minimize();
+    getMainWindow()?.hide();
   });
 
   ipcMain.on(IPC_CHANNELS.WINDOW_MAXIMIZE, () => {
@@ -15,7 +15,7 @@ export function registerWindowHandlers(): void {
   });
 
   ipcMain.on(IPC_CHANNELS.WINDOW_CLOSE, () => {
-    getMainWindow()?.close();
+    getMainWindow()?.hide();
   });
 
   ipcMain.on(IPC_CHANNELS.WINDOW_RESIZE, (_, payload: { width: number; height: number }) => {

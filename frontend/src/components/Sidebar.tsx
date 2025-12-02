@@ -1,4 +1,4 @@
-import { MessageSquare, Plus, Trash2, X } from 'lucide-react';
+import { MessageSquare, Plus, Settings, Trash2, X } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { duration, ease, fadeIn, fadeOut, slideIn, slideOut } from '../lib/animations';
 import { useChatStore } from '../store/useChatStore';
@@ -26,7 +26,7 @@ SessionItem.displayName = 'SessionItem';
 export const Sidebar = memo(() => {
   const { sessions, currentSessionId, selectSession, createSession, deleteSession } =
     useChatStore();
-  const { isSidebarOpen, setSidebarOpen } = useUIStore();
+  const { isSidebarOpen, setSidebarOpen, toggleSettings } = useUIStore();
 
   const [shouldRender, setShouldRender] = useState(isSidebarOpen);
   const backdropRef = useRef<HTMLDivElement>(null);
@@ -59,6 +59,11 @@ export const Sidebar = memo(() => {
   );
 
   const handleClose = useCallback(() => setSidebarOpen(false), [setSidebarOpen]);
+
+  const handleSettings = useCallback(() => {
+    toggleSettings();
+    setSidebarOpen(false);
+  }, [toggleSettings, setSidebarOpen]);
 
   if (!shouldRender) return null;
 
@@ -98,6 +103,20 @@ export const Sidebar = memo(() => {
               />
             ))
           )}
+        </div>
+
+        <div
+          className="sidebar-footer"
+          style={{
+            marginTop: 'auto',
+            paddingTop: '16px',
+            borderTop: '1px solid var(--glass-border)',
+          }}
+        >
+          <button onClick={handleSettings} className="new-chat-btn">
+            <Settings size={16} />
+            <span>Settings</span>
+          </button>
         </div>
       </div>
     </>

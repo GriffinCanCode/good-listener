@@ -27,6 +27,7 @@ export function createMainWindow(): BrowserWindow {
     alwaysOnTop: true,
     resizable: true,
     hasShadow: true,
+    skipTaskbar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       nodeIntegration: false,
@@ -51,7 +52,14 @@ export function createMainWindow(): BrowserWindow {
 
   // Show when ready
   mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
+    // Start hidden for tray app
+  });
+
+  // Hide on blur
+  mainWindow.on('blur', () => {
+    if (!mainWindow?.webContents.isDevToolsOpened()) {
+      mainWindow?.hide();
+    }
   });
 
   mainWindow.on('closed', () => {

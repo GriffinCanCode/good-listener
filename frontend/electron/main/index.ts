@@ -1,5 +1,6 @@
 import { app, globalShortcut } from 'electron';
 import { registerIpcHandlers } from './ipc';
+import { createTray } from './tray';
 import { createMainWindow, getMainWindow } from './window';
 
 // Ensure single instance
@@ -8,6 +9,11 @@ const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
   app.quit();
 } else {
+  // Hide dock icon on macOS (makes it a tray-only app)
+  if (process.platform === 'darwin') {
+    app.dock.hide();
+  }
+
   app.on('second-instance', () => {
     const win = getMainWindow();
     if (win) {
@@ -22,6 +28,9 @@ if (!gotTheLock) {
 
     // Create the main window
     createMainWindow();
+
+    // Create the system tray
+    createTray();
 
     // Global shortcut to toggle visibility
     globalShortcut.register('CommandOrControl+H', () => {

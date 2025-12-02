@@ -1,4 +1,5 @@
 import { registerWindowHandlers } from './handlers/window';
+import { registerSettingsHandlers } from './settings';
 
 /**
  * Register all IPC handlers
@@ -6,4 +7,5 @@ import { registerWindowHandlers } from './handlers/window';
  */
 export function registerIpcHandlers(): void {
   registerWindowHandlers();
+  registerSettingsHandlers();
 }

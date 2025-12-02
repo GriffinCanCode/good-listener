@@ -1,17 +1,9 @@
-import {
-  Camera,
-  FileText,
-  Menu,
-  MessageCircleQuestion,
-  Send,
-  Sparkles,
-  X,
-  Zap,
-} from 'lucide-react';
+import { Camera, FileText, Menu, Send, Sparkles, X, Zap } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { LiveTranscript } from './components/LiveTranscript';
 import { MicButton } from './components/MicButton';
+import { SettingsModal } from './components/SettingsModal';
 import { Sidebar } from './components/Sidebar';
 import { Stoplight } from './components/Stoplight';
 import { useAutoScroll } from './hooks/useAutoScroll';
@@ -31,39 +23,27 @@ interface AutoAnswerCardProps {
 }
 
 const AutoAnswerCard = memo(
-  React.forwardRef<HTMLDivElement, AutoAnswerCardProps>(({ autoAnswer, onDismiss }, ref) => (
-    <div ref={ref} className="auto-answer-card">
-      <div className="auto-answer-header">
-        <div className="auto-answer-badge">
-          <Zap size={14} />
-          <span>Question Detected</span>
+  React.forwardRef<HTMLDivElement, AutoAnswerCardProps>(({ autoAnswer, onDismiss }, ref) => {
+    useEffect(() => {
+      const timer = setTimeout(onDismiss, 2500);
+      return () => clearTimeout(timer);
+    }, [onDismiss]);
+
+    return (
+      <div ref={ref} className="auto-answer-toast">
+        <div className="toast-icon">
+          <Zap size={16} />
         </div>
-        <button onClick={onDismiss} className="icon-btn auto-dismiss">
+        <div className="toast-content">
+          <div className="toast-title">Question Detected</div>
+          <div className="toast-message">"{autoAnswer.question}"</div>
+        </div>
+        <button onClick={onDismiss} className="icon-btn toast-close">
           <X size={14} />
         </button>
       </div>
-      <div className="auto-answer-question">
-        <MessageCircleQuestion size={16} />
-        <span>"{autoAnswer.question}"</span>
-      </div>
-      <div className="auto-answer-content">
-        {autoAnswer.content ? (
-          <ReactMarkdown>{autoAnswer.content}</ReactMarkdown>
-        ) : (
-          <div className="auto-answer-loading">
-            <span className="pulse-dot" />
-            <span className="pulse-dot" />
-            <span className="pulse-dot" />
-          </div>
-        )}
-      </div>
-      {autoAnswer.isStreaming && autoAnswer.content && (
-        <div className="auto-answer-streaming">
-          <span className="streaming-indicator" />
-        </div>
-      )}
-    </div>
-  ))
+    );
+  })
 );
 AutoAnswerCard.displayName = 'AutoAnswerCard';
 
@@ -125,6 +105,27 @@ const App: React.FC = () => {
   const messages = getCurrentSession()?.messages ?? [];
   const { containerRef } = useAutoScroll([messages, stream]);
 
+  // Sync settings on startup
+  useEffect(() => {
+    void window.electron?.settings
+      .get()
+      .then((settings) => {
+        void fetch(`${API_BASE}/api/config`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            provider: settings.llm.provider,
+            model: settings.llm.model,
+            api_key: settings.llm.apiKey,
+            ollama_host: settings.llm.ollamaHost,
+          }),
+        }).catch(console.error);
+      })
+      .catch(console.error);
+  }, []);
+
   useEffect(() => {
     createSession();
   }, [createSession]);
@@ -171,6 +172,7 @@ const App: React.FC = () => {
   return (
     <div className="app-container">
       <Sidebar />
+      <SettingsModal />
       <div className={`main-content ${isSidebarOpen ? 'pushed' : ''}`}>
         <div className="header draggable">
           <div className="header-left">

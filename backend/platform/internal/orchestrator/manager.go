@@ -7,6 +7,8 @@ import (
 	"sync"
 	"time"
 
+	"google.golang.org/grpc/metadata"
+
 	audiocap "github.com/GriffinCanCode/good-listener/backend/platform/internal/audio"
 	"github.com/GriffinCanCode/good-listener/backend/platform/internal/config"
 	"github.com/GriffinCanCode/good-listener/backend/platform/internal/grpcclient"
@@ -39,6 +41,14 @@ type VADEvent struct {
 // Orchestrator is an alias for Manager (backwards compatibility).
 type Orchestrator = Manager
 
+// LLMOverrides holds dynamic configuration for the LLM service.
+type LLMOverrides struct {
+	Provider   string
+	Model      string
+	APIKey     string
+	OllamaHost string
+}
+
 // Manager coordinates all services.
 type Manager struct {
 	inference *grpcclient.Client
@@ -52,10 +62,11 @@ type Manager struct {
 	autoAnswerChan chan AutoAnswerEvent
 	vadChan        chan VADEvent
 
-	mu        sync.RWMutex
-	recording bool
-	stopCh    chan struct{}
-	mainCtx   context.Context
+	mu           sync.RWMutex
+	recording    bool
+	stopCh       chan struct{}
+	mainCtx      context.Context
+	llmOverrides LLMOverrides
 }
 
 // New creates a new manager.
@@ -173,6 +184,21 @@ func (m *Manager) streamAutoAnswer(ctx context.Context, question string) {
 		UserQuery:   "Answer this question (use general knowledge/assumptions if context is missing): " + question,
 		Transcript:  m.GetRecentTranscript(AutoAnswerTranscriptSeconds),
 		ContextText: m.GetLatestScreenText(),
+	}
+
+	// Apply overrides for auto-answer too
+	m.mu.RLock()
+	overrides := m.llmOverrides
+	m.mu.RUnlock()
+
+	if overrides.Provider != "" {
+		md := metadata.New(map[string]string{
+			"x-llm-provider": overrides.Provider,
+			"x-llm-model":    overrides.Model,
+			"x-llm-api-key":  overrides.APIKey,
+			"x-ollama-host":  overrides.OllamaHost,
+		})
+		ctx = metadata.NewOutgoingContext(ctx, md)
 	}
 
 	err := m.inference.AnalyzeStream(ctx, req, func(chunk string) {
@@ -379,11 +405,38 @@ func (m *Manager) SetAutoAnswer(enabled bool) {
 	m.autoAnswer.SetEnabled(enabled)
 }
 
+// UpdateLLMConfig updates the LLM configuration overrides.
+func (m *Manager) UpdateLLMConfig(provider, model, apiKey, ollamaHost string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.llmOverrides = LLMOverrides{
+		Provider:   provider,
+		Model:      model,
+		APIKey:     apiKey,
+		OllamaHost: ollamaHost,
+	}
+	trace.Logger(context.Background()).Info("llm config updated", "provider", provider, "model", model)
+}
+
 // Analyze sends a query to the LLM.
 func (m *Manager) Analyze(ctx context.Context, query string, onChunk func(string)) error {
 	ctx, span := trace.StartSpan(ctx, "orchestrator_analyze")
 	defer span.End()
 	span.SetAttr("query_len", len(query))
+
+	m.mu.RLock()
+	overrides := m.llmOverrides
+	m.mu.RUnlock()
+
+	if overrides.Provider != "" {
+		md := metadata.New(map[string]string{
+			"x-llm-provider": overrides.Provider,
+			"x-llm-model":    overrides.Model,
+			"x-llm-api-key":  overrides.APIKey,
+			"x-ollama-host":  overrides.OllamaHost,
+		})
+		ctx = metadata.NewOutgoingContext(ctx, md)
+	}
 
 	req := &pb.AnalyzeRequest{
 		UserQuery:   query,

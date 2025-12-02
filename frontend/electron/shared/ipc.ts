@@ -36,6 +36,8 @@ export interface IpcInvokeMap {
   // 'app:get-version': { request: undefined; response: string };
 }
 
+import type { Settings } from './settings';
+
 // Type-safe API exposed to renderer
 export interface ElectronAPI {
   window: {
@@ -47,6 +49,10 @@ export interface ElectronAPI {
     onStateChanged: (
       callback: (state: { isMaximized: boolean; isMinimized: boolean }) => void
     ) => () => void;
+  };
+  settings: {
+    get: () => Promise<Settings>;
+    set: (settings: Settings) => Promise<Settings>;
   };
   platform: NodeJS.Platform;
 }

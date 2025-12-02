@@ -2,6 +2,7 @@ import type { IpcRendererEvent } from 'electron';
 import { contextBridge, ipcRenderer } from 'electron';
 import type { ElectronAPI } from '../shared/ipc';
 import { IPC_CHANNELS } from '../shared/ipc';
+import { SETTINGS_CHANNELS, type Settings } from '../shared/settings';
 
 // Event handler creator for void callbacks
 const createVoidEventHandler = (channel: string) => {
@@ -49,6 +50,10 @@ const electronAPI: ElectronAPI = {
     onStateChanged: createTypedEventHandler<{ isMaximized: boolean; isMinimized: boolean }>(
       IPC_CHANNELS.WINDOW_STATE_CHANGED
     ),
+  },
+  settings: {
+    get: () => ipcRenderer.invoke(SETTINGS_CHANNELS.GET_SETTINGS),
+    set: (settings: Settings) => ipcRenderer.invoke(SETTINGS_CHANNELS.SET_SETTINGS, settings),
   },
   platform: process.platform,
 };

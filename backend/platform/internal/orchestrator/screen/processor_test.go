@@ -27,15 +27,6 @@ func (m *mockOCR) ExtractText(_ context.Context, _ []byte, _ string) (string, er
 	return m.text, m.err
 }
 
-type mockMemory struct {
-	stored []string
-}
-
-func (m *mockMemory) StoreMemory(_ context.Context, text, _ string) error {
-	m.stored = append(m.stored, text)
-	return nil
-}
-
 func TestProcessorText(t *testing.T) {
 	p := &Processor{text: "Screen content"}
 
@@ -70,9 +61,8 @@ func TestProcessorSetRecording(t *testing.T) {
 func TestNewProcessor(t *testing.T) {
 	cap := &mockCapturer{}
 	ocr := &mockOCR{}
-	mem := &mockMemory{}
 
-	p := NewProcessor(cap, ocr, mem)
+	p := NewProcessor(cap, ocr)
 
 	if p == nil {
 		t.Fatal("expected processor, got nil")
